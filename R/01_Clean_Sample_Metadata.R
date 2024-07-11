@@ -119,6 +119,7 @@ broom::tidy(mod.insect.ssu) %>%
 # Can remove those columns...
 
 # remove unimportant columns from "for_analysis" data frame
+# If we decide to leave these in, skip this
 for_analysis <- 
   for_analysis %>% 
   dplyr::select(-all_of(c(insect_columns,"insect")))
@@ -156,6 +157,8 @@ for_analysis %>%
 for_analysis <- 
   for_analysis %>% 
   dplyr::select(-anomoly)
+for_analysis$collection_year %>% table
+collection_data$year %>% table
 
 # test predictive ability of remaining lgl cols
 its.plantmatter <- 
@@ -202,9 +205,11 @@ lgl_predictive_capacity <-
        mutate(region = "SSU") %>% 
        dplyr::filter(term != "(Intercept)"))
   )
-
+lgl_predictive_capacity
 # seems like plant matter and lab error correlate with ITS (but not SSU) richness
 # plot them...
+for_analysis$plantmatter_pa %>% table
+
 
 for_analysis %>%
   dplyr::select(its_asv_richness,plantmatter_pa,lab_error) %>% 
@@ -226,11 +231,11 @@ collection_data %>% glimpse
 
 # first, clean up each column
 collection_data$dust_collector_label %>% unique # some entries left off leading '0'
-collection_data$dust_collector_label <- 
-collection_data$dust_collector_label %>% 
-  str_replace_all("^01$","001") %>% 
-  str_replace_all("^02$","002") 
-
+# collection_data$dust_collector_label <- # undo this 
+# collection_data$dust_collector_label %>% 
+#   str_replace_all("^01$","001") %>% 
+#   str_replace_all("^02$","002") 
+for_analysis$index
 collection_data$canister_height %>% unique # imported as a list, some entries have label appended
 collection_data$canister_height <- # just pull last digit
 collection_data$canister_height %>% 
@@ -269,6 +274,8 @@ collection_data_subset <-
   collection_data_subset %>% 
   mutate(notes = paste(notes_9,notes_11,notes_13,notes_15,notes_17,notes_19,notes_21,notes_23,notes_25,sep=';')) %>% 
   dplyr::select(-all_of(notes_cols))
+collection_data_subset$notes
+
 # further cleanup
 collection_data_subset <- 
   collection_data_subset %>% 
@@ -296,7 +303,7 @@ collection_data_subset$date %>%
 # clean up "position"
 collection_data_subset$position_e_g_ne_corner_s_side %>% unique
 # nope...these are all over the place. Just leave it for now.
-
+collection_data_subset$position_e_g_ne_corner_s_side %>% table %>% as.data.frame()
 ## "combined" data sets ####
 
 # full join with main data frame
@@ -316,14 +323,9 @@ full$index %ni% for_analysis$index
 duplicated_samples <- 
 full %>% 
   dplyr::filter(index %in% full$index[which(duplicated(full$index))])
-# ask Paul about these. Most seem to be repeats, but with different collectors
-# Nate Martineau 2022-10-20
-# Ty Lindberg 2022-11-03
+duplicated_samples
 
-duplicated_samples %>% View
-# for now, just gonna remove Ty Lindberg's version (all important data is the same)
-dup.rows.to.remove <- which(full$index %in% full$index[which(duplicated(full$index))] & full$name == "Ty Lindberg")
-full <- full[-dup.rows.to.remove,]
+
 
 # See if any of the logical note columns from the second spreadsheet have any impact on richness
 new_lgl_cols <- 
@@ -355,6 +357,9 @@ glm(data = ssu_rf,
     formula = ssu_asv_richness ~ otherwise_can_the_mast_spin_freely) %>% 
   summary
 
+full$otherwise_can_the_mast_spin_freely %>% table
+
+
 # potentially important notes columns (for richness in its and ssu)
 # "does_the_collector_look_damaged_in_any_other_way",
 # "otherwise_can_the_mast_spin_freely"
@@ -377,6 +382,12 @@ full$distance_from_ground_to_center_of_top_canister_cm[full$distance_from_ground
 # now convert to numeric
 full$distance_from_ground_to_center_of_top_canister_cm <- 
   full$distance_from_ground_to_center_of_top_canister_cm %>% unlist %>% as.numeric
+
+
+## get rid of SCBI2 (alleged forest scary bear) samples ####
+sum(full$site == "SCBI2")
+full <- 
+  full %>% dplyr::filter(site != "SCBI2")
 
 
 ## add library info ####
