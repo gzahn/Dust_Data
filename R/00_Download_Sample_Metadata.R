@@ -14,10 +14,7 @@ googledrive::drive_auth()
 # google drive URLs
 dust_data_for_analysis <- "https://docs.google.com/spreadsheets/d/18weKsvAKS9TMZeKMTzM85gti8NYsPXcxd33pgnI_xkw/edit?gid=1423804161#gid=1423804161"
 collection_data_responses <- "https://docs.google.com/spreadsheets/d/1XDKWhWwQIUKnYm699nhuVxhNXHJW7qVrcqQ_HqIpwho/edit?gid=207128096#gid=207128096"
-# library prep data sheets (save for later, but here's an example)
-lib_prep_run6 <- "https://docs.google.com/spreadsheets/d/1c3FwyCob8FTs4hAFKDaPXe295OUlTQorKCObvokkeL8/edit?gid=872892900#gid=872892900"
-lib_prep_run7 <- "https://docs.google.com/spreadsheets/d/1fkqzwdCtLdCH0xmbJE8bWcMe93xz2GeffUT-1z7Qe58/edit?gid=185399237#gid=185399237"
-
+library_data <- "https://docs.google.com/spreadsheets/d/15y2TKOAPEYAAUtAy0jAHdi0q45WhEjTnWWGwvnlGE_U/edit?gid=0#gid=0"
 
 
 # LOAD DATA FROM GOOGLE DRIVE ####
@@ -32,17 +29,14 @@ collection_data <- googledrive::drive_get(collection_data_responses) %>%
   googlesheets4::read_sheet(sheet = "Edited and most complete copy of collection") %>% 
   janitor::clean_names()
 
-# library prep sheets (need to check with Paul about exactly which sheets to use here!)
-lib_prep_dust_ssu_6 <- googledrive::drive_get(lib_prep_run6) %>% 
-  googlesheets4::read_sheet(sheet = "SSU P2 (DUST)") %>% 
+# library prep sheets
+lib_data <- googledrive::drive_get(library_data) %>% 
+  googlesheets4::read_sheet(sheet = "all_data") %>% 
   janitor::clean_names()
-lib_prep_soil_ssu_6 <- googledrive::drive_get(lib_prep_run6) %>% 
-  googlesheets4::read_sheet(sheet = "SSU P1 (SOIL)") %>% 
-  janitor::clean_names()
-# etc.  .....
-# merge these into one spreadsheet!
+
 
 # SAVE METADATA FILES ####
 saveRDS(for_analysis, "./data/dust_data_for_analysis.RDS")
 saveRDS(collection_data, "./data/collection_data_responses.RDS")
+saveRDS(library_data, "./data/library_data.RDS")
 # export library prep data as well, but only as a single merged data frame

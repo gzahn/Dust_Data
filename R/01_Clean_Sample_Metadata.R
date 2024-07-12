@@ -19,6 +19,8 @@ library(broom)
 # load metadata that was downloaded from Google Drive
 for_analysis <- readRDS("./data/dust_data_for_analysis.RDS")
 collection_data <- readRDS("./data/collection_data_responses.RDS")
+lib_data <- readRDS("./data/library_data.RDS")
+
 # placeholder for library prep data frame
 
 # EXPLORE AND CLEAN ####
@@ -385,13 +387,19 @@ full$distance_from_ground_to_center_of_top_canister_cm <-
 
 
 ## get rid of SCBI2 (alleged forest scary bear) samples ####
-sum(full$site == "SCBI2")
 full <- 
   full %>% dplyr::filter(site != "SCBI2")
 
 
 ## add library info ####
-# gel bands is really the only thing (even worth doing?)
+
+# create "index" to match data sheet
+# pull run #
+# pull dust vs soil sample type
+# pull gel bands 
+# check all worksheets in those files (each row in each tab is separate sample)
+
+
 
 
 ## add filepath info ####
