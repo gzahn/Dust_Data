@@ -21,7 +21,14 @@ for_analysis <- readRDS("./data/dust_data_for_analysis.RDS")
 collection_data <- readRDS("./data/collection_data_responses.RDS")
 lib_data <- readRDS("./data/library_data.RDS")
 
+wind <- readRDS("./data/wind_data.RDS")
+temp <- readRDS("./data/temp_data.RDS")
+precip <- readRDS("./data/precip_data.RDS")
+
+
 # placeholder for library prep data frame
+
+
 
 # EXPLORE AND CLEAN ####
 
@@ -34,8 +41,7 @@ num_cols <- c("height","collection_year","nano_ng_u_l",
   "a260_a280","a260_a230","height_cm","lat_dd",
   "mwac_condition","gelband_pa",
   "its_reads","its_asv_richness","ssu_reads","ssu_asv_richness",
-  "site_avg_elevation_m","mean_temperature_o_c","mean_precipitation_mm",
-  "x30yr_percip","x30yr_temp")
+  "site_avg_elevation_m","mean_temperature_o_c","mean_precipitation_mm")
 
 # list of "notes" columns
 notes_cols <- c("water_pa","plantmatter_pa","insect_pa","insect","anomoly","lab_error")
@@ -61,6 +67,7 @@ insect_options <- notes_values$insect %>%
   map(str_squish) %>% 
   unlist %>% 
   unique()
+
 # find logicals for each insect name
 # first, remove the "no" insect from the options
 insect_options <- insect_options[insect_options != "no"]  
@@ -223,7 +230,7 @@ for_analysis %>%
   theme_bw()
 # leave in those columns, and remove "water_pa" and "insect_pa" (since it was already dealt with)
 for_analysis$water_pa <- NULL
-for_analysis$insect_pa <- NULL
+# for_analysis$insect_pa <- NULL
 
 ## "collection data" data frame ####
 collection_data %>% glimpse
@@ -389,6 +396,21 @@ full$distance_from_ground_to_center_of_top_canister_cm <-
 ## get rid of SCBI2 (alleged forest scary bear) samples ####
 full <- 
   full %>% dplyr::filter(site != "SCBI2")
+
+
+## add weather variables ####
+weather <- 
+  wind %>% 
+  full_join(temp,by=c("site_id","year")) %>% 
+  full_join(precip,by=c("site_id","year"))
+
+# rename "site_id" column to match full dataset
+names(weather)[names(weather) == "site_id"] <- "site"
+
+# join weather variables to full dataset
+full <- 
+full %>% 
+  full_join(weather)
 
 
 ## add library info ####
