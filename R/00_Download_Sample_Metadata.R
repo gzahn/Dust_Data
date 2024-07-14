@@ -7,8 +7,8 @@ library(googledrive)
 library(janitor)
 
 
-# authenticate google drive
-# use browser option ... sign in to dartmouth account in browser, giving full permissions to API
+# authenticate Google drive
+# use browser option ... sign in to Dartmouth account in browser, giving full permissions to API
 googledrive::drive_auth() # select option 1, use browser to complete
 
 # google drive URLs
