@@ -16,6 +16,9 @@ library(broom)
 # handy shortcut functions
 '%ni%' <- Negate('%in%')
 
+# random seed
+set.seed(666)
+
 # load metadata that was downloaded from Google Drive
 for_analysis <- readRDS("./data/dust_data_for_analysis.RDS")
 collection_data <- readRDS("./data/collection_data_responses.RDS")
@@ -24,9 +27,6 @@ lib_data <- readRDS("./data/library_data.RDS")
 wind <- readRDS("./data/wind_data.RDS")
 temp <- readRDS("./data/temp_data.RDS")
 precip <- readRDS("./data/precip_data.RDS")
-
-
-# placeholder for library prep data frame
 
 
 
@@ -415,16 +415,118 @@ full %>%
 
 ## add library info ####
 
+# add amplicon column to full (ITS/SSU), and then double it
+full2 <- 
+  full %>% 
+  mutate(amplicon = "ITS") %>% 
+  full_join(full %>% 
+              mutate(amplicon = "SSU"))
+
 # create "index" to match data sheet
-# pull run #
-# pull dust vs soil sample type
-# pull gel bands 
-# check all worksheets in those files (each row in each tab is separate sample)
+lib_data <- 
+  lib_data %>% 
+  mutate(index = sample_id)
+
+# create library_id in full2 to match lib_data
+full2 <- 
+  full2 %>% 
+  mutate(library_id = paste0(index,"_",amplicon))
+
+# join it with full2
+full <- 
+  full2 %>% 
+  full_join(lib_data)
+
+# which are 'new' rows
+x <- full[which(full$library_id %ni% full2$library_id),] 
+x %>% 
+  pluck('sample_type') %>% 
+  table
+# some are dust samples, but a lot are controls/scat
+# which are "dust" samples, and why are they not found in full2 ?
+full$sample_type %>% skimr::skim()
+full[which(is.na(full$sample_type)),] %>% dim
+
+full[which(is.na(full$sample_id)),]
+# 80 samples in 'full' are missing a sample_id
+
+full %>% dplyr::filter(is.na(index)) %>% View
+# two are missing the index value
 
 
+# example... "003-2-23" is missing from for_analysis data frame
+which(for_analysis$index == "003-2-23")
+# but it is found in the collection data
+which(collection_data$index == "003-2-23")
+collection_data[which(collection_data$index == "003-2-23"),] %>% glimpse
+
+# and in the library info
+which(lib_data$index == "003-2-23")
+
+# so probably it (and others) won't be added to for_analysis until they are sequenced
+# same with control samples.
+
+#... do we have seq files for those???
+# ...seems like yes, but they aren't named the same way in the lib_data sheet and the filesystem
+
+# ADD FILEPATHS ####
+
+# load file list (update this after final seq runs)
+file_list <- readLines("./data/file_list.txt")
+length(file_list)
 
 
-## add filepath info ####
+# remove "error" samples
+file_list <- file_list[!grepl("error",ignore.case = TRUE,file_list)]
+# "filtN" files
+file_list <- file_list[!grepl("filtN",ignore.case = FALSE,file_list)]
+# "ITS_Subset" and "SSU_Subset" samples
+file_list <- file_list[!grepl("ITS_Subset",ignore.case = FALSE,file_list)]
+file_list <- file_list[!grepl("SSU_Subset",ignore.case = FALSE,file_list)]
+# "Undetermined" = missing barcode matches
+file_list <- file_list[!grepl("Undetermined",ignore.case = FALSE,file_list)]
+# Zac and Tristan's samples
+file_list <- file_list[!grepl("Zac",ignore.case = FALSE,file_list)]
+file_list <- file_list[!grepl("Tristan",ignore.case = TRUE,file_list)]
+# Sarah's samples
+file_list <- file_list[!grepl("SCAT",ignore.case = TRUE,file_list)]
+# "quarantine" = removed by DADA2 for low read counts
+file_list <- file_list[!grepl("quarantine",ignore.case = TRUE,file_list)]
+# "cutadapt" samples
+file_list <- file_list[!grepl("cutadapt",ignore.case = TRUE,file_list)]
+length(file_list)
+
+
+# find samples that are scat, but not in a "scat" directory
+other_scat_prefixes <- 
+file_list %>% str_split("/") %>% 
+  map_chr(9) %>% 
+  unique %>% 
+  grep(x=.,pattern = "^[A-Z]",value = TRUE) %>% 
+  str_split("-") %>% 
+  map_chr(1) %>% 
+  unique() %>% 
+  grep(pattern = "^Neg|^Pos|^SSU|^ITS",value = TRUE, invert = TRUE) # keep control samples
+
+to_keep <- 
+  !sapply(file_list, function(x) any(sapply(other_scat_prefixes, function(p) grepl(p, x))))
+file_list <- 
+  file_list[to_keep]
+
+# name the vector
+names(file_list) <- basename(file_list)
+View(file_list)
+file_list[names(file_list) %>% grep(pattern = "^[0-9]")] %>% 
+  str_split("/") %>% map_chr(8) %>% unique
+
+
+file_list %>% grep(pattern="081",value = TRUE) %>% unique
+
+file_list[names(file_list) %>% grep(pattern = "^[0-9]",value = TRUE)]
+names(file_list) %>% grep(pattern = "^[a-z]",value = TRUE,ignore.case = TRUE) %>% 
+  length
+wellnamed_file_list <- file_list[names(file_list) %>% grep(pattern = "^[a-z]",value = TRUE,ignore.case = TRUE)]
+
 # Need to be able to link this sample metadata to the ASV table
 
 
