@@ -288,6 +288,8 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   filts_f <- filts_f[which((filts_f %in% new_filts_f))]
   if(paired){filts_r <- filts_r[which((filts_r %in% new_filts_r))]}
   
+  # make metadata match files that made it through all previous steps!
+  metadata <- meta[which((filts_f %in% new_filts_f)),]
   
   
   # learn errors
@@ -308,16 +310,23 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
     
   
   # dereplication
-  derepF <- derepFastq(filts_f, verbose=FALSE)
-  if(paired){derepR <- derepFastq(filts_r, verbose=FALSE)}
+  derepF <- derepFastq(filts_f, verbose=TRUE)
+  # saveRDS(derepF,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_derep_Fwd.RDS")))
+  if(paired){
+    derepR <- derepFastq(filts_r, verbose=TRUE)
+    # saveRDS(derepR,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_derep_Rev.RDS")))
+    }
   
   
   # SAMPLE INFERRENCE ####
   dadaFs <- dada(derepF, err=errF, multithread=ifelse(multithread>1,TRUE,FALSE), 
                  selfConsist = TRUE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
+  saveRDS(dadaFs,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_dada_Fwd.RDS")))
+  
   if(paired){
     dadaRs <- dada(derepR, err=errR, multithread=ifelse(multithread>1,TRUE,FALSE), 
-                   selfConsist = TRUE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows  
+                   selfConsist = TRUE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
+    saveRDS(dadaRs,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_dada_Rev.RDS")))
   }
   
   
@@ -338,8 +347,6 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=ifelse(multithread>1,TRUE,FALSE), verbose=TRUE)
   
   # REMOVE CONTAMINANTS ####
-  
-  # make metadata match files that made it through all previous steps!
   
   # find negative control samples, if any
   metadata[["control"]] <- metadata[["sample_type"]] == "neg_control"
