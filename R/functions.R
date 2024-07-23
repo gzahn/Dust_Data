@@ -101,7 +101,7 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
     if(!dir.exists(i)) dir.create(i)
   }
   
-  # build file names for cutadpat output
+  # build file names for cutadapt output
   fnFs.cut <- file.path(path.cut, paste0(sample_names,"_cutadapt_fwd.fastq.gz"))
   fnRs.cut <- file.path(path.cut, paste0(sample_names,"_cutadapt_rev.fastq.gz"))
   
@@ -118,17 +118,8 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
                                  fnFs.filtN[i], fnRs.filtN[i])) # input files
   }
   
-  # Discover primer matches, regardless of orientation ####
-  primerHits <- function(primer, fn) {
-    # Counts number of reads in which the primer is found
-    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
-    return(sum(nhits > 0))
-  }
   
-  ##### update metadata to now include cutadapt columns with new filepaths #####
-  # # think about if this is even useful
-  # x$fwd_cutadpat_filepath <- fnFs.cut 
-  # x$rev_cutadapt_filepath <- fnRs.cut
+
 
 }
 
@@ -181,10 +172,10 @@ run_itsxpress <- function(directory, # where cutadapted reads live
 # this function will run dada2 on files from a single sequencing run, given a metadata sheet that has samples from multiple runs
 
 build_asv_table <- function(metadata, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
-                            run.id.colname = "seq_run", # name of column in metadata indicating which sequencing run a sample comes from
+                            run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
                             run.id, # the run ID to perform function on, from the run.id.colname column. Enter as a character, e.g., "1"
                             amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
-                            amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
+                            amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                             sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
                             fwd.fp.colname = "fwd_filepath", # name of column in metadata indicating fwd filepath to trimmed data (e.g., cutadapt)
                             rev.fp.colname = "rev_filepath", # name of column in metadata indicating rev filepath to trimmed data (e.g., cutadapt)
@@ -197,7 +188,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
                             multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
                             single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
                             filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
-                            asv.table.dir = ".", # path to directory where final ASV table will be saved
+                            asv.table.dir = "./ASV_Tables", # path to directory where final ASV table will be saved
                             random.seed = 666){
   
   # tests
@@ -210,7 +201,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   # parse options
   if(single.end){
     paired <- FALSE
-    maxEE <- 2
+    maxEE <- maxEE[1]
   } else {
     paired <- TRUE
     maxEE <- maxEE
@@ -298,15 +289,21 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   if(paired){filts_r <- filts_r[which((filts_r %in% new_filts_r))]}
   
   
+  
   # learn errors
   errF <- learnErrors(filts_f, multithread=ifelse(multithread>1,TRUE,FALSE), 
                       MAX_CONSIST = 20,verbose = 1,
                       randomize = TRUE) # set multithread = FALSE on Windows
+  errF_out <- paste0("Run_",as.character(run.id),"_",amplicon,"_err_Fwd.RDS")
+  saveRDS(errF,file.path(asv.table.dir,errF_out))
+  
   
   if(paired){
   errR <- learnErrors(filts_r, multithread=ifelse(multithread>1,TRUE,FALSE), 
                       MAX_CONSIST = 20,verbose = 1,
                       randomize = TRUE) # set multithread = FALSE on Windows
+  errR_out <- paste0("Run_",as.character(run.id),"_",amplicon,"_err_Rev.RDS")
+  saveRDS(errR,file.path(asv.table.dir,errR_out))
   }
     
   
@@ -342,13 +339,17 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   
   # REMOVE CONTAMINANTS ####
   
-  # find negative control samples, if any
-  metadata$control <- metadata$sample_type == "neg_control"
+  # make metadata match files that made it through all previous steps!
   
-  if(any(metadata$control)){
+  # find negative control samples, if any
+  metadata[["control"]] <- metadata[["sample_type"]] == "neg_control"
+  
+  
+  # only run if there are negative control(s) that have at least some reads
+  if(any(metadata[["control"]]) & sum(seqtab.nochim[metadata[["control"]],]) > 0){
     # Find and remove contaminants
     contams = decontam::isContaminant(seqtab.nochim, neg = metadata$control, normalize = TRUE)
-    contams$contaminant
+
     # remove contaminant sequences and control samples from both tables, respectively ####
     seqtab.nochim = seqtab.nochim[,(which(contams$contaminant != TRUE))]
     seqtab.nochim = seqtab.nochim[!metadata$control,]
@@ -356,8 +357,33 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   }
   
   # make output name for ASV table
-  asv_out <- paste0("Run_",as.character(run.id),"_",amplicon,"_ASV_Table.RDS")
+  asv_out <- paste0(asv.table.dir,"Run_",as.character(run.id),"_",amplicon,"_ASV_Table.RDS")
   
   saveRDS(seqtab.nochim,file.path(asv.table.dir,asv_out))
 
+}
+
+
+
+# assign_taxonomy_to_asv_table()
+# function to assign taxonomy to an asv table from the dada2 pipeline
+# inputs: asv table | path-to-database | 
+
+assign_taxonomy_to_asv_table <- function(asv.table, # asv table object name
+                                         tax.database, # path to taxonomic database (fasta)
+                                         multithread=(parallel::detectCores()-1), # set to FALSE on Windows
+                                         random.seed=666,
+                                         try.rc = TRUE, # attempt revComplement assignments as well? (doubles time)
+                                         min.boot=50 # bootstrap of 50% recommended for seqs shorter than 250nt
+                                         ){
+  x <- assignTaxonomy(seqs = asv.table,
+                      refFasta = tax.database,
+                      minBoot = min.boot,
+                      tryRC = try.rc,
+                      outputBootstraps = FALSE,
+                      multithread = multithread,
+                      verbose = FALSE)
+  
+  return(x)
+  
 }

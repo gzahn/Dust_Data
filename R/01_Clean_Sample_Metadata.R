@@ -493,6 +493,7 @@ file_list <- file_list[!grepl("SCAT",ignore.case = TRUE,file_list)]
 # "quarantine" = removed by DADA2 for low read counts
 file_list <- file_list[!grepl("quarantine",ignore.case = TRUE,file_list)]
 # "cutadapt" samples
+file_list %>% tail()
 file_list <- file_list[!grepl("cutadapt",ignore.case = TRUE,file_list)]
 length(file_list)
 
@@ -536,6 +537,12 @@ wellnamed_file_list <- file_list[names(file_list) %>% grep(pattern = "^[a-z]",va
 # wind direction/speed
 # ...
 
+full$run_id
+full$fwd_filepath
+
+# deal with weird googlesheets "#N/A"
+full$fwd_filepath[full$fwd_filepath == "#N/A"] <- NA
+full$rev_filepath[full$rev_filepath == "#N/A"] <- NA
 
 
 # EXPORT ####
