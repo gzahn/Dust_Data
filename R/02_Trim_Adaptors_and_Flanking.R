@@ -62,15 +62,15 @@ remove_primers(metadata, # metadata object for multi-seq-run samples; must conta
 # Run itsxpress
   #on just ITS samples (and just FWD ITS1 samples, actually)
 
+run_itsxpress(directory="./data/raw/cutadapt", # where cutadapted reads live
+              itsregion="ITS1", # must be "ITS1" or "ITS2"
+              taxa_group="All",
+              nthreads=(parallel::detectCores()-1),
+              fwd_pattern="ITS_cutadapt_fwd.fastq.gz",
+              rev_pattern="ITS_cutadapt_rev.fastq.gz",
+              itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress", #path to executable
+              fwd.only=TRUE)
 
-
-
-# testing file output on local computer
-cutadapt_ftest_fwd <- paste0("./data/raw/cutadapt/",metadata$index,"_ITS_cutadapt_fwd.fastq.gz")
-cutadapt_ftest_rev <- paste0("./data/raw/cutadapt/",metadata$index,"_ITS_cutadapt_rev.fastq.gz")
-
-missing_fwds <- cutadapt_ftest_fwd[!file_test("-f",cutadapt_ftest_fwd)]
-missing_revs <- cutadapt_ftest_rev[!file_test("-f",cutadapt_ftest_fwd)]
 
 metadata$local_fwd_cutadapt_paths <- cutadapt_ftest_fwd
 metadata$local_rev_cutadapt_paths <- cutadapt_ftest_rev

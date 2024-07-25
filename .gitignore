@@ -1,7 +1,10 @@
 # Big files not for GitHuub
 data/raw
+data/physeq_objects
 testing
 taxonomy
+data/ASV_Tables
+
 
 # History files
 .Rhistory

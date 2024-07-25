@@ -22,10 +22,33 @@ filtN_dir <- list.dirs(full.names = TRUE)[grep("filtN$",list.dirs(full.names = T
 meta$cutadapt_fwd_paths <- paste0(cutadapt_dir,"/",meta$library_id,"_cutadapt_fwd.fastq.gz")
 meta$cutadapt_rev_paths <- paste0(cutadapt_dir,"/",meta$library_id,"_cutadapt_rev.fastq.gz")
 
+# add ITSxpress file paths, based on cutadapt paths
+# old # ./data/raw/cutadapt/001-1-21_ITS_cutadapt_fwd.fastq.gz
+# new # ./data/raw/ITSx/001-1-21_ITS_cutadapt_fwd_ITSxpress.fastq.gz
+
+fwd_itsx_paths <- 
+meta$cutadapt_fwd_paths %>% 
+  str_replace("/cutadapt/","/ITSx/") %>% 
+  str_replace("_fwd.fastq.gz","_fwd_ITSxpress.fastq.gz")
+rev_itsx_paths <- 
+  meta$cutadapt_rev_paths %>% 
+  str_replace("/cutadapt/","/ITSx/") %>% 
+  str_replace("_rev.fastq.gz","_rev_ITSxpress.fastq.gz")
+# add to metadata
+meta$itsx_fwd_paths <- ifelse(grepl("_SSU_",fwd_itsx_paths),NA,fwd_itsx_paths)
+meta$itsx_rev_paths <- ifelse(grepl("_SSU_",rev_itsx_paths),NA,rev_itsx_paths)
 
 # subset metadata to samples clearly not present in cutadapt
 meta <- meta[file_test("-f",meta$cutadapt_fwd_paths),]
-
+# remove any ITS samples that didn't pass ITSxpress
+itsx_file_present <- # is there a file for this library?
+meta$itsx_fwd_paths %in% list.files(unique(dirname(meta$itsx_fwd_paths)),
+                                    pattern="fwd_ITSxpress.fastq.gz",
+                                    full.names = TRUE)
+is_its <- meta$amplicon == "ITS" # is the library ITS?
+missing_itsx <- is_its & !itsx_file_present # which ITS libraries have missing files?
+keepers <- !missing_itsx | meta$amplicon == "SSU" # keep ITS libraries with files, and all SSU libraries
+meta <- meta[keepers,] # subset metadata
 
 # list of sequencing runs
 all_runs <- meta$run_id %>% as.character() %>% unique
@@ -34,48 +57,60 @@ all_runs <- all_runs[!is.na(all_runs)]
 
 # RUN ALL ITS DATA ####
 for(seqrun in all_runs){
-  build_asv_table(metadata=meta, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
-                  run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
-                  run.id = seqrun, # the run ID to perform function on, from the run.id.colname column. Enter as a character, e.g., "1"
-                  amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
-                  amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
-                  sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
-                  fwd.fp.colname = "cutadapt_fwd_paths", # name of column in metadata indicating fwd filepath to trimmed data (e.g., cutadapt)
-                  rev.fp.colname = "cutadapt_rev_paths", # name of column in metadata indicating rev filepath to trimmed data (e.g., cutadapt)
-                  fwd.pattern = "_R1_", # pattern in filepath column indicating fwd reads (to be safe)
-                  rev.pattern = "_R2_", # pattern in filepath column indicating rev reads (to be safe),
-                  maxEE = c(3,3), # max expected errors for filtration step of dada2 (for single-end cases like ITS, will default to maxEE=2)
-                  truncQ = 2, # special value denoting "end of good quality sequence"
-                  rm.phix = TRUE, # remove phiX sequences?
-                  compress = TRUE, # gzip compression of output?
-                  multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
-                  single.end = TRUE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
-                  filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
-                  asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
-                  random.seed = 666
-  )
+  
+  # make sure these seq runs actually have samples from that amplicon present
+  n.samples.in.run <- sum(meta[['run_id']] == seqrun & meta[['amplicon']] == "ITS")
+  if(n.samples.in.run > 0){
+    build_asv_table(metadata=meta, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+                    run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
+                    run.id = seqrun, # the run ID to perform function on, from the run.id.colname column. Enter as a character, e.g., "1"
+                    amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
+                    amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
+                    sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
+                    fwd.fp.colname = "itsx_fwd_paths", # name of column in metadata indicating fwd filepath to trimmed data (e.g., cutadapt)
+                    rev.fp.colname = "itsx_rev_paths", # name of column in metadata indicating rev filepath to trimmed data (e.g., cutadapt)
+                    fwd.pattern = "fwd", # pattern in filepath column indicating fwd reads (to be safe)
+                    rev.pattern = "rev", # pattern in filepath column indicating rev reads (to be safe),
+                    maxEE = c(3,5), # max expected errors for filtration step of dada2 (for single-end cases like ITS, will default to maxEE=2)
+                    trim.right=c(20,20), # amount to trim off of 3' end after quality truncation
+                    truncQ = 2, # special value denoting "end of good quality sequence"
+                    rm.phix = TRUE, # remove phiX sequences?
+                    compress = TRUE, # gzip compression of output?
+                    multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
+                    single.end = TRUE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
+                    filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
+                    asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
+                    random.seed = 666
+    )
+  } else {next}
 }
 
 # RUN ON ALL SSU DATA ####
 for(seqrun in all_runs){
-  build_asv_table(metadata=meta, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
-                  run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
-                  run.id = seqrun, # the run ID to perform function on, from the run.id.colname column. Enter as a character, e.g., "1"
-                  amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
-                  amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
-                  sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
-                  fwd.fp.colname = "cutadapt_fwd_paths", # name of column in metadata indicating fwd filepath to trimmed data (e.g., cutadapt)
-                  rev.fp.colname = "cutadapt_rev_paths", # name of column in metadata indicating rev filepath to trimmed data (e.g., cutadapt)
-                  fwd.pattern = "_R1_", # pattern in filepath column indicating fwd reads (to be safe)
-                  rev.pattern = "_R2_", # pattern in filepath column indicating rev reads (to be safe),
-                  maxEE = c(3,3), # max expected errors for filtration step of dada2 (for single-end cases like ITS, will default to maxEE=2)
-                  truncQ = 2, # special value denoting "end of good quality sequence"
-                  rm.phix = TRUE, # remove phiX sequences?
-                  compress = TRUE, # gzip compression of output?
-                  multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
-                  single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
-                  filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
-                  asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
-                  random.seed = 666
-  )
+  
+  # make sure these seq runs actually have samples from that amplicon present
+  n.samples.in.run <- sum(meta[['run_id']] == seqrun & meta[['amplicon']] == "ITS")
+  if(n.samples.in.run > 0){
+    build_asv_table(metadata=meta, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+                    run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
+                    run.id = seqrun, # the run ID to perform function on, from the run.id.colname column. Enter as a character, e.g., "1"
+                    amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
+                    amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
+                    sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
+                    fwd.fp.colname = "cutadapt_fwd_paths", # name of column in metadata indicating fwd filepath to trimmed data (e.g., cutadapt)
+                    rev.fp.colname = "cutadapt_rev_paths", # name of column in metadata indicating rev filepath to trimmed data (e.g., cutadapt)
+                    fwd.pattern = "_R1_", # pattern in filepath column indicating fwd reads (to be safe)
+                    rev.pattern = "_R2_", # pattern in filepath column indicating rev reads (to be safe),
+                    maxEE = c(3,5), # max expected errors for filtration step of dada2 (for single-end cases like ITS, will default to maxEE=2)
+                    trim.right=c(20,20), # amount to trim off of 3' end after quality truncation
+                    truncQ = 2, # special value denoting "end of good quality sequence"
+                    rm.phix = TRUE, # remove phiX sequences?
+                    compress = TRUE, # gzip compression of output?
+                    multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
+                    single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
+                    filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
+                    asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
+                    random.seed = 666
+    )
+  } else {next}
 }

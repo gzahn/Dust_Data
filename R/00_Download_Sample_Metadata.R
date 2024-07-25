@@ -23,7 +23,7 @@ library_data <- "https://docs.google.com/spreadsheets/d/15y2TKOAPEYAAUtAy0jAHdi0
 for_analysis <- googledrive::drive_get(dust_data_for_analysis) %>% 
   googlesheets4::read_sheet(sheet = "ForAnalysis") %>% 
   janitor::clean_names() # automatically clean the names of columns
-1
+3
 # dust data for analysis (NEON Weather station data by site)
 wind <- googledrive::drive_get(dust_data_for_analysis) %>% 
   googlesheets4::read_sheet(sheet = "tristanWind") %>% 

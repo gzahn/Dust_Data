@@ -47,13 +47,14 @@ num_cols <- c("height","collection_year","nano_ng_u_l",
 notes_cols <- c("water_pa","plantmatter_pa","insect_pa","insect","anomoly","lab_error")
 
 # do class conversions
+for_analysis$date_nanodrop
 for_analysis <- 
 for_analysis %>% 
   mutate(long_dd = long_dd %>% # convert longitude from list to numeric
            map_chr(1) %>% # don't know why this is a 'list' but it was
            as.numeric()) %>% 
   mutate(across(all_of(num_cols), as.numeric)) %>% 
-  mutate(date_nanodrop = date_nanodrop %>% 
+  mutate(date_nanodrop = date_nanodrop %>% unlist %>% 
            as.POSIXct(format = '%m/%d/%Y, %I:%M:%S %p'))
 
 # find unique notes
@@ -96,6 +97,7 @@ its <- for_analysis %>%
   dplyr::select(its_asv_richness,all_of(insect_columns))
 its <- its[complete.cases(its),]
 # run ranger model to see if any insect columns are predictive of richness
+# these throw errors is any missing info (like asv_richness)
 ssu.mod <- ranger::ranger(formula = ssu_asv_richness ~ .,
                data=ssu,importance = "permutation")
 vip::vip(ssu.mod)
@@ -447,10 +449,10 @@ x %>%
 full$sample_type %>% skimr::skim()
 full[which(is.na(full$sample_type)),] %>% dim
 
-full[which(is.na(full$sample_id)),]
-# 80 samples in 'full' are missing a sample_id
+full[which(is.na(full$library_id)),]
 
-full %>% dplyr::filter(is.na(index)) %>% View
+
+full %>% dplyr::filter(is.na(index))
 # two are missing the index value
 
 
@@ -469,11 +471,14 @@ which(lib_data$index == "003-2-23")
 #... do we have seq files for those???
 # ...seems like yes, but they aren't named the same way in the lib_data sheet and the filesystem
 
+full$run_id %>% unique
+
+
 # ADD FILEPATHS ####
 
 # load file list (update this after final seq runs)
 file_list <- readLines("./data/file_list.txt")
-length(file_list)
+file_list <- readLines("./data/dartfs_paths.txt")
 
 
 # remove "error" samples
@@ -516,7 +521,7 @@ file_list <-
 
 # name the vector
 names(file_list) <- basename(file_list)
-View(file_list)
+
 file_list[names(file_list) %>% grep(pattern = "^[0-9]")] %>% 
   str_split("/") %>% map_chr(8) %>% unique
 
@@ -543,6 +548,8 @@ full$fwd_filepath
 # deal with weird googlesheets "#N/A"
 full$fwd_filepath[full$fwd_filepath == "#N/A"] <- NA
 full$rev_filepath[full$rev_filepath == "#N/A"] <- NA
+
+
 
 
 # EXPORT ####

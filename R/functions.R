@@ -3,6 +3,13 @@
 # relative abundance transformation
 ra <- function(x){x/sum(x)}
 
+# EE() ####
+# calculate expected errors in a sequence from a vector of quality scores
+EE <- function(qual.scores){
+  sum(10^(-qual.scores/10))
+}
+
+
 # plot_bar2() ####
 # phyloseq bar plot without lines for each ASV
 plot_bar2 <- function (physeq, x = "Sample", y = "Abundance", fill = NULL, 
@@ -130,38 +137,71 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
 # Valid taxa_group arguments: 
 # Alveolata,Bryophyta,Bacillariophyta,Amoebozoa,Euglenozoa,Fungi,Chlorophyta,Rhodophyta,Phaeophyceae,Marchantiophyta,Metazoa,Oomycota,Haptophyceae,Raphidophyceae, Rhizaria,Synurophyceae,Tracheophyta,Eustigmatophyceae,All
 
-run_itsxpress <- function(directory, # where cutadapted reads live
+run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted reads live
                           itsregion="ITS1", # must be "ITS1" or "ITS2"
                           taxa_group="All",
                           nthreads=(parallel::detectCores()-1),
-                          fwd_pattern="_R1_"){
+                          fwd_pattern="ITS_cutadapt_fwd.fastq.gz",
+                          rev_pattern="ITS_cutadapt_rev.fastq.gz",
+                          itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress", #path to executable
+                          fwd.only=TRUE){
+  
+  # my paths, for easy reference:
+  # itsxpress.path="/home/gzahn/.local/bin/itsxpress"
+  # itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress"
   
   # find the "cutadapted" files
   fwds <- list.files(directory,pattern = fwd_pattern,full.names = TRUE)
+  revs <- list.files(directory,pattern = rev_pattern,full.names = TRUE)
+  
   # build names for outfiles
-  outs <- paste0(tools::file_path_sans_ext(fwds) %>% 
+  outs_fwd <- paste0(tools::file_path_sans_ext(fwds) %>% 
                    tools::file_path_sans_ext(), 
-                 "_ITS.fastq.gz")
+                 "_ITSxpress.fastq.gz")
+  outs_rev <- paste0(tools::file_path_sans_ext(revs) %>% 
+                     tools::file_path_sans_ext(), 
+                   "_ITSxpress.fastq.gz")
+  
   its_dir <- directory %>% str_replace('cutadapt','ITSx')
 
   if(!dir.exists(its_dir)){dir.create(its_dir)}
   
-  outs <- file.path(its_dir,basename(outs))
+  outs_fwd <- file.path(its_dir,basename(outs_fwd))
+  outs_rev <- file.path(its_dir,basename(outs_rev))
   
   # build the ITSxpress command and run it on each file in turn
 
-  for(i in 1:length(fwds)){
-      itsxpress <- paste0("itsxpress --fastq ",fwds[i],
-                        " --outfile ",outs[i],
-                        " --region ",itsregion,
-                        " --taxa ",taxa_group,
-                        " --threads ",nthreads,
-                        " --log ",outs[i],".log",
-                        " --single_end")
-    
-    system(command = itsxpress)
+  if(fwd.only){
+    for(i in 1:length(fwds)){
+      itsxpress <- paste0(itsxpress.path,
+                          " --fastq ",fwds[i],
+                          " --outfile ",outs_fwd[i],
+                          " --region ",itsregion,
+                          " --taxa ",taxa_group,
+                          " --threads ",nthreads,
+                          " --log ",outs[i],".log",
+                          " --single_end")
+      system(command = itsxpress)
+    }
   }
   
+  if(!fwd.only){
+    for(i in 1:length(fwds)){
+      itsxpress <- paste0(itsxpress.path,
+                          " --fastq ",fwds[i],
+                          " --fastq2 ",revs[i],
+                          " --outfile ",outs_fwd[i],
+                          " --outfile2 ",outs_rev[i],
+                          " --region ",itsregion,
+                          " --taxa ",taxa_group,
+                          " --threads ",nthreads,
+                          " --log ",outs[i],".log"
+      )
+      system(command = itsxpress)
+    }
+  }
+    
+    
 }
 
 
@@ -182,6 +222,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
                             fwd.pattern = "_R1_", # pattern in filepath column indicating fwd reads (to be safe)
                             rev.pattern = "_R2_", # pattern in filepath column indicating rev reads (to be safe),
                             maxEE = c(2,2), # max expected errors for filtration step of dada2 (for single-end cases like ITS, will default to maxEE=2)
+                            trim.right = NA, # amount to trim off of 3' end after quality truncation
                             truncQ = 2, # special value denoting "end of good quality sequence"
                             rm.phix = TRUE, # remove phiX sequences?
                             compress = TRUE, # gzip compression of output?
@@ -207,12 +248,11 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
     maxEE <- maxEE
   }
   set.seed(random.seed)
-  
+
   # subset to sequencing run and only rows with file names
   metadata <- 
   metadata[as.character(metadata[[run.id.colname]]) == as.character(run.id) & 
              !is.na(metadata[[fwd.fp.colname]]) & metadata[[amplicon.colname]] == amplicon,]
-  
   
   # parse filepaths and sample names
   fns <- metadata[[fwd.fp.colname]]
@@ -246,6 +286,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
                        maxN=0, 
                        maxEE=maxEE, 
                        truncQ=truncQ,
+                       trimRight = ifelse(any(is.na(trim.right)),0,trim.right[1:2]),
                        rm.phix=rm.phix, 
                        compress=compress,
                        multithread=multithread)
@@ -254,6 +295,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
                          maxN=0,
                          maxEE=maxEE[1],
                          truncQ=truncQ,
+                         trimRight = ifelse(any(is.na(trim.right)),0,trim.right[1]),
                          rm.phix=rm.phix,
                          compress=compress,
                          multithread=multithread)
@@ -393,4 +435,98 @@ assign_taxonomy_to_asv_table <- function(asv.table, # asv table object name
   
   return(x)
   
+}
+
+
+# find_gps_dists() ####
+# given two data.frames (x,y) of lat/lon points, finds the distance from each point 
+# in x to each point in y. By default, returns the distance to only the closest point in y
+# good for finding nearest points
+find_gps_dists <- 
+  function(points1,points2,min.only=TRUE){
+    
+    # tests
+    stopifnot(any(class(points1) == "data.frame"))
+    stopifnot(any(class(points2) == "data.frame"))
+    
+    if(ncol(points1) != 2 | ncol(points2) != 2){
+      stop("data frames must have 2 columns only")
+    }
+    
+    if(!apply(points1,2,class) %>% unique() %in% c("numeric","integer")){
+      stop("columns must be numeric; col1=longitude,col2=latitude")
+    }
+    
+    if(!apply(points2,2,class) %>% unique() %in% c("numeric","integer")){
+      stop("columns must be numeric; col1=longitude,col2=latitude")
+    }
+    
+    # actual function
+    mylist <- list()
+    for(i in 1:nrow(points1)){
+      mylist[[i]] <- points1[i,] %>% unlist
+    }
+    
+    distances <- list()
+    for(i in 1:nrow(points2)){
+      
+      mydistfunction <- function(x){geosphere::distHaversine(x,points2[i,])}
+      colname <- paste0("dist_to_",i)
+      distances[[colname]] <- map_dbl(mylist, mydistfunction)
+    }
+    
+    x <- as.data.frame(distances)
+    mins <- apply(x,1,min)
+    
+    if(min.only){
+      return(mins)
+    } else {
+      return(x)
+    }
+    
+  }
+
+
+# auto_permanova() ####
+auto_permanova <- function(physeq,
+                            data,
+                            pred.cols,
+                            strata.col,
+                            mod.type = "additive"){
+  
+  ra_comm <- 
+    physeq %>% 
+    transform_sample_counts(ra) %>% 
+    otu_table() %>% 
+    as.matrix()
+  
+  cc <- data %>% 
+    dplyr::select(all_of(c(pred.cols,strata.col))) %>% 
+    complete.cases()
+  
+  df <- data[cc,]
+
+  if(mod.type == "additive"){
+    mod.formula <- as.formula(paste0("ra_comm[cc,]","~",paste(pred.cols,collapse=" + ")))
+  }
+  
+  if(mod.type == "interactive"){
+    mod.formula <- as.formula(paste0("ra_comm[cc,]","~",paste(pred.cols,collapse=" * ")))
+  }
+  
+  
+  # run simple permanova
+  if(!is.na(strata.col)){
+    mod <- 
+      adonis2(data = df,
+              formula = mod.formula,
+              strata = df[[strata.col]])
+  } else {
+    mod <- 
+      adonis2(data = df,
+              formula = mod.formula)
+  }
+  
+  
+ return(mod) 
 }
