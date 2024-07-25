@@ -9,4 +9,4 @@ Rscript R/01_Clean_Sample_Metadata.R
 Rscript R/02_Trim_Adaptors_and_Flanking.R
 Rscript R/03_Build_ASV_Tables.R
 Rscript R/04_Assign_Taxonomy.R
-
+Rscript R/05_Build_Physeq_Objects.R
