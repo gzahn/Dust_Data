@@ -1,3 +1,8 @@
+# palettes ####
+pal <- list(
+  pal.earthtones = c("#4E6172","#D57500","#8F3B1B","#404F24","#613318","#668D3C"),
+  pal.okabe = c("#000000","#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#D55E00","#CC79A7")
+)
 
 # ra() ####
 # relative abundance transformation
@@ -8,7 +13,6 @@ ra <- function(x){x/sum(x)}
 EE <- function(qual.scores){
   sum(10^(-qual.scores/10))
 }
-
 
 # plot_bar2() ####
 # phyloseq bar plot without lines for each ASV
@@ -95,6 +99,13 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   for(i in unique(filtN_paths)){
     if(!file_test("-d", i)){dir.create(i)}
   }
+  
+  # Check for missing files and remove them from fnFs, fnFs.filtN, fnRs, and fnRs.filtN
+  extant_files <- file.exists(fnFs) & file.exists(fnRs)
+  fnFs <- fnFs[extant_files]
+  fnRs <- fnFs[extant_files]
+  fnFs.filtN <- fnFs.filtN[extant_files]
+  fnRs.filtN <- fnRs.filtN[extant_files]
   
   # Remove reads with any Ns
   filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, 
@@ -530,3 +541,31 @@ auto_permanova <- function(physeq,
   
  return(mod) 
 }
+
+
+# clean_ps_taxonomy() ####
+# get rid of the annoying "k__" stuff at the beginning of taxonomy assignments for each tax level
+# these are usually only an issue with fungal assignments (e.g., UNITE format)
+
+
+clean_ps_taxonomy <- function(physeq,
+                              n.ranks=7 # number of taxonomic ranks in physeq object
+                              ){
+  
+  # get rank names
+  ranks <- rank_names(physeq)
+  prefix <- str_sub(ranks,end=1) %>% str_to_lower() %>% paste0("__")
+  
+  x <- tax_table(physeq)@.Data
+  
+  for(i in seq_along(ranks)){
+    x[,i] <- x[,i] %>% str_remove(prefix[i])
+  }
+  
+  out <- phyloseq(otu_table(physeq,taxa_are_rows = FALSE),
+                  tax_table(x),
+                  sample_data(physeq))
+  
+  return(out)
+}
+
