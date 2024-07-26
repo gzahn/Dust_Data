@@ -14,8 +14,8 @@ unzip General_EUK_ITS_v1.8.zip && rm General_EUK_ITS_v1.8.zip
 
 
 # reformat Eukaryome to play nicely with dada2 assignTaxonomy() function
-zcat General_EUK_SSU_v1.8.zip | sed 's/>\([^;]*;\)/>/' | sed 's/>\([^|]*|\)/>/' | sed 's/|/;/g' > Eukaryome_General_SSU_v1.8_reformatted.fasta
-zcat General_EUK_ITS_v1.8.zip | sed 's/>\([^;]*;\)/>/' | sed 's/>\([^|]*|\)/>/' | sed 's/|/;/g' > Eukaryome_General_ITS_v1.8_reformatted.fasta
+cat General_EUK_SSU_v1.8.fasta | sed 's/>\([^;]*;\)/>/' | sed 's/>\([^|]*|\)/>/' | sed 's/|/;/g' > Eukaryome_General_SSU_v1.8_reformatted.fasta
+cat General_EUK_ITS_v1.8.fasta | sed 's/>\([^;]*;\)/>/' | sed 's/>\([^|]*|\)/>/' | sed 's/|/;/g' > Eukaryome_General_ITS_v1.8_reformatted.fasta
 
 
 # get maarjAM databases (fasta)
