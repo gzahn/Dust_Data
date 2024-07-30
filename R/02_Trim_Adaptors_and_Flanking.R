@@ -12,8 +12,8 @@ library(parallel); packageVersion("parallel")
 source("./R/functions.R")
 
 ## Data ####
-metadata <- readRDS("./data/full_clean_metadata.RDS") %>% 
-  dplyr::filter(!is.na(fwd_filepath))
+metadata <- readRDS("./data/full_clean_metadata.RDS")
+
 
 # if running on local machine  
 metadata$fwd_filepath <- paste0("./data/raw/",basename(metadata$fwd_filepath))
@@ -71,8 +71,8 @@ run_itsxpress(directory="./data/raw/cutadapt", # where cutadapted reads live
               itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress", #path to executable
               fwd.only=TRUE)
 
-
-metadata$local_fwd_cutadapt_paths <- cutadapt_ftest_fwd
-metadata$local_rev_cutadapt_paths <- cutadapt_ftest_rev
-
-saveRDS(metadata,"./data/cutadapt_metadata.RDS")
+# 
+# metadata$local_fwd_cutadapt_paths <- cutadapt_ftest_fwd
+# metadata$local_rev_cutadapt_paths <- cutadapt_ftest_rev
+# 
+# saveRDS(metadata,"./data/cutadapt_metadata.RDS")

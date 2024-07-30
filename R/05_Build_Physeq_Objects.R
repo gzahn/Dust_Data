@@ -20,8 +20,6 @@ tax_tables <- list.files(asv_table_dir,full.names = TRUE, pattern = "_Taxonomy_T
 # out path
 out_paths <- paste0(asv_tables %>% str_remove("_ASV_Table.RDS"),"_physeq_object.RDS")
 
-
-
 # DATA ####
 
 # get metadata
@@ -64,12 +62,12 @@ for(i in seq_along(asv_tables)){
 ## SSU ####
 ssu_ps_files <- list.files(asv_table_dir,full.names = TRUE,pattern="SSU_physeq_object.RDS")  
 ssu_ps_list <- map(ssu_ps_files,readRDS)
-ssu_ps <- reduce(ssu_ps_list,merge_phyloseq)
+ssu_ps <- purrr::reduce(ssu_ps_list,merge_phyloseq)
 
 ## ITS ####
 its_ps_files <- list.files(asv_table_dir,full.names = TRUE,pattern="ITS_physeq_object.RDS")  
 its_ps_list <- map(its_ps_files,readRDS)
-its_ps <- reduce(its_ps_list,merge_phyloseq)
+its_ps <- purrr::reduce(its_ps_list,merge_phyloseq)
 
 # EXPORT ####
 dir.create("./data/physeq_objects")

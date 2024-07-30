@@ -14,7 +14,10 @@ meta <- readRDS("./data/full_clean_metadata.RDS")
 # meta <- readRDS("./data/cutadapt_metadata.RDS")
 # writeLines(c(meta$fwd_filepath,meta$rev_filepath),"./data/dartfs_paths.txt")
 # writeLines(meta$rev_filepath,"./data/dartfs_rev_paths.txt")
-
+if(any(meta$fwd_filepath == meta$rev_filepath)){
+  meta$fwd_filepath[which(meta$fwd_filepath == meta$rev_filepath)]
+  stop("Some filepaths are duplicated!!!")
+}
 
 # add cutadapt file paths
 cutadapt_dir <- list.dirs(full.names = TRUE)[grep("cutadapt$",list.dirs(full.names = TRUE))]
@@ -38,8 +41,11 @@ rev_itsx_paths <-
 meta$itsx_fwd_paths <- ifelse(grepl("_SSU_",fwd_itsx_paths),NA,fwd_itsx_paths)
 meta$itsx_rev_paths <- ifelse(grepl("_SSU_",rev_itsx_paths),NA,rev_itsx_paths)
 
-# subset metadata to samples clearly not present in cutadapt
-meta <- meta[file_test("-f",meta$cutadapt_fwd_paths),]
+# subset metadata to samples clearly present in cutadapt
+meta <- meta[file.exists(meta$cutadapt_fwd_paths),]
+meta[meta$run_id == "6",'library_id']
+
+
 # remove any ITS samples that didn't pass ITSxpress
 itsx_file_present <- # is there a file for this library?
 meta$itsx_fwd_paths %in% list.files(unique(dirname(meta$itsx_fwd_paths)),
@@ -82,14 +88,14 @@ for(seqrun in all_runs){
                     asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
                     random.seed = 666
     )
-  } else {next}
+  } else {break}
 }
 
 # RUN ON ALL SSU DATA ####
 for(seqrun in all_runs){
   
   # make sure these seq runs actually have samples from that amplicon present
-  n.samples.in.run <- sum(meta[['run_id']] == seqrun & meta[['amplicon']] == "ITS")
+  n.samples.in.run <- sum(meta[['run_id']] == seqrun & meta[['amplicon']] == "SSU")
   if(n.samples.in.run > 0){
     build_asv_table(metadata=meta, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                     run.id.colname = "run_id", # name of column in metadata indicating which sequencing run a sample comes from
@@ -107,10 +113,10 @@ for(seqrun in all_runs){
                     rm.phix = TRUE, # remove phiX sequences?
                     compress = TRUE, # gzip compression of output?
                     multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
-                    single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
+                    single.end = TRUE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
                     filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
                     asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
                     random.seed = 666
     )
-  } else {next}
+  } else {break}
 }

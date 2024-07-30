@@ -4,6 +4,11 @@ pal <- list(
   pal.okabe = c("#000000","#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#D55E00","#CC79A7")
 )
 
+# %ni% ####
+# "not in" logical expression
+'%ni%' <- Negate('%in%')
+
+
 # ra() ####
 # relative abundance transformation
 ra <- function(x){x/sum(x)}
@@ -103,11 +108,17 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   # Check for missing files and remove them from fnFs, fnFs.filtN, fnRs, and fnRs.filtN
   extant_files <- file.exists(fnFs) & file.exists(fnRs)
   fnFs <- fnFs[extant_files]
-  fnRs <- fnFs[extant_files]
+  fnRs <- fnRs[extant_files]
   fnFs.filtN <- fnFs.filtN[extant_files]
   fnRs.filtN <- fnRs.filtN[extant_files]
-  
+  # c(fnFs,fnRs,fnFs.filtN,fnRs.filtN)[which(duplicated(c(fnFs,fnRs,fnFs.filtN,fnRs.filtN)))]
   # Remove reads with any Ns
+  
+  # only run this if the output files don't exist already from a previous pass through
+  fnFs <- fnFs[!file.exists(fnFs.filtN)]; fnFs.filtN <- fnFs.filtN[!file.exists(fnFs.filtN)]
+  fnRs <- fnRs[!file.exists(fnRs.filtN)]; fnRs.filtN <- fnRs.filtN[!file.exists(fnRs.filtN)]
+  
+  
   filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, 
                 maxN = 0, 
                 multithread = ifelse(multithread>1,TRUE,FALSE)) # on Windows, set multithread = FALSE
@@ -130,15 +141,15 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   # Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
   R2.flags <- paste("-G", REV, "-A", FWD.RC) 
   # Run Cutadapt
-  for(i in seq_along(fnFs)) {
-    system2("cutadapt", args = c(R1.flags, R2.flags, "-n", 2, "--minimum-length 100", "--cores 0", # -n 2 required to remove FWD and REV from reads
-                                 "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
-                                 fnFs.filtN[i], fnRs.filtN[i])) # input files
+  for(i in seq_along(fnFs.cut)) {
+    if(!file.exists(fnFs.cut[i])){
+      system2("cutadapt", args = c(R1.flags, R2.flags, "-n", 2, "--minimum-length 100", "--cores 0", # -n 2 required to remove FWD and REV from reads
+                                   "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                                   fnFs.filtN[i], fnRs.filtN[i])) # input files
+    } else {next}
+    
   }
   
-  
-
-
 }
 
 
@@ -238,7 +249,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
                             rm.phix = TRUE, # remove phiX sequences?
                             compress = TRUE, # gzip compression of output?
                             multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
-                            single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
+                            single.end = TRUE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
                             filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
                             asv.table.dir = "./ASV_Tables", # path to directory where final ASV table will be saved
                             random.seed = 666){
@@ -287,8 +298,6 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   for(i in unique(filtered_paths)){
     if(!file_test("-d", i)){dir.create(i)}
   }
-  
-  
   
   
   # filter and trim
@@ -419,7 +428,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   # make output name for ASV table
   asv_out <- paste0(asv.table.dir,"Run_",as.character(run.id),"_",amplicon,"_ASV_Table.RDS")
   
-  saveRDS(seqtab.nochim,file.path(asv.table.dir,asv_out))
+  saveRDS(seqtab.nochim,asv_out)
 
 }
 
@@ -569,3 +578,54 @@ clean_ps_taxonomy <- function(physeq,
   return(out)
 }
 
+
+# simplify_fungal_guilds()
+# extract major guild groupings
+# needs a data.frame with a "Guild" column that contains the results from FunGuild assignment
+# will return the data.frame with a new column "major_guild"
+simplify_fungal_guilds <- 
+  function(x){
+    x %>% 
+      mutate(major_guild = case_when(grepl("Ectomycorrhizal",Guild,ignore.case = TRUE) ~ "Ectomycorrhizal",
+                                     grepl("ericoid",Guild,ignore.case = TRUE) ~ "Ericoid mycorrhizal",
+                                     grepl("arbuscular",Guild,ignore.case=TRUE) ~ "Arbuscular mycorrhizal",
+                                     grepl("Plant Pathogen",Guild,ignore.case=TRUE) ~ "Plant pathogen",
+                                     grepl("Animal Pathogen",Guild,ignore.case=TRUE) ~ "Animal pathogen",
+                                     grepl("Saprotroph",Guild,ignore.case=TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) &
+                                       !grepl("pathogen",Guild,ignore.case=TRUE) ~ "Saprotroph",
+                                     grepl("Orchid Mycorrhizal",Guild) ~ "Orchid Mycorrhizal",
+                                     grepl("lichenized",Guild,ignore.case=TRUE) ~ "Lichenized",
+                                     grepl("Animal Parasite",Guild) ~ "Animal Parasite",
+                                     grepl("Algal Parasite|Plant Parasite",Guild) ~ "Plant Parasite",
+                                     grepl("Animal Symbiotroph",Guild) ~ "Animal Symbiotroph"
+      ))
+  }
+
+# googlemap_json_to_string()
+# convert json google map styling to api string
+googlemap_json_to_string <- 
+  function (style_list) 
+  {
+    style_string <- ""
+    for (i in 1:length(style_list)) {
+      if ("featureType" %in% names(style_list[[i]])) {
+        style_string <- paste0(style_string, "feature:", 
+                               style_list[[i]]$featureType, "|")
+      }
+      if ("elementType" %in% names(style_list[[i]])) {
+        style_string <- paste0(style_string, "element:", 
+                               style_list[[i]]$elementType, "|")
+      }
+      elements <- style_list[[i]]$stylers
+      a <- lapply(elements, function(x) paste0(names(x), ":", 
+                                               x)) %>% unlist() %>% paste0(collapse = "|")
+      style_string <- paste0(style_string, a)
+      if (i < length(style_list)) {
+        style_string <- paste0(style_string, "&style=")
+      }
+    }
+    style_string <- gsub("#", "0x", style_string)
+    style_string <- gsub("[|]", "%7C", style_string)
+    return(style_string)
+  }

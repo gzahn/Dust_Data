@@ -10,7 +10,7 @@ library(janitor)
 # authenticate Google drive
 # use browser option ... sign in to Dartmouth account in browser, giving full permissions to API
 googledrive::drive_auth() # select option 1, use browser to complete
-1
+3
 # google drive URLs
 dust_data_for_analysis <- "https://docs.google.com/spreadsheets/d/18weKsvAKS9TMZeKMTzM85gti8NYsPXcxd33pgnI_xkw/edit?gid=1423804161#gid=1423804161"
 collection_data_responses <- "https://docs.google.com/spreadsheets/d/1XDKWhWwQIUKnYm699nhuVxhNXHJW7qVrcqQ_HqIpwho/edit?gid=207128096#gid=207128096"
@@ -34,7 +34,7 @@ temp <- googledrive::drive_get(dust_data_for_analysis) %>%
   janitor::clean_names() # automatically clean the names of columns
 
 precip <- googledrive::drive_get(dust_data_for_analysis) %>% 
-  googlesheets4::read_sheet(sheet = "tristanPrecip") %>% 
+  googlesheets4::read_sheet(sheet = "tristanPrimaryPrecip") %>% 
   janitor::clean_names() # automatically clean the names of columns
 
 
