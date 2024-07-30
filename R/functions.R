@@ -118,10 +118,11 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   fnFs <- fnFs[!file.exists(fnFs.filtN)]; fnFs.filtN <- fnFs.filtN[!file.exists(fnFs.filtN)]
   fnRs <- fnRs[!file.exists(fnRs.filtN)]; fnRs.filtN <- fnRs.filtN[!file.exists(fnRs.filtN)]
   
-  
-  filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, 
-                maxN = 0, 
-                multithread = ifelse(multithread>1,TRUE,FALSE)) # on Windows, set multithread = FALSE
+  if(all(length(fnFs) > 0 & length(fnRs) > 0 & length(fnFs.filtN) > 0 & length(fnRs.filtN) > 0)){
+    filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, 
+                  maxN = 0, 
+                  multithread = ifelse(multithread>1,TRUE,FALSE)) # on Windows, set multithread = FALSE
+  }
   
   # build cutadapt file structure
   path.cut <- file.path(dirname(fnFs),"cutadapt")
