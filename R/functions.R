@@ -144,9 +144,16 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   # Run Cutadapt
   for(i in seq_along(fnFs.cut)) {
     if(!file.exists(fnFs.cut[i])){
-      system2("cutadapt", args = c(R1.flags, R2.flags, "-n", 2, "--minimum-length 100", "--cores 0", # -n 2 required to remove FWD and REV from reads
-                                   "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
-                                   fnFs.filtN[i], fnRs.filtN[i])) # input files
+      system2("cutadapt", args = c(R1.flags, 
+                                   R2.flags, 
+                                   "-n", 2, 
+                                   "--minimum-length 100",
+                                   "--cores 0",
+                                   "--nextseq-trim",
+                                   "-o", fnFs.cut[i],
+                                   "-p", fnRs.cut[i], 
+                                   fnFs.filtN[i], 
+                                   fnRs.filtN[i])) 
     } else {next}
     
   }
@@ -202,8 +209,9 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
                           " --region ",itsregion,
                           " --taxa ",taxa_group,
                           " --threads ",nthreads,
-                          " --log ",outs[i],".log",
+                          " --log ",outs_fwd[i],".log",
                           " --single_end")
+      cat(fwds[i])
       system(command = itsxpress)
     }
   }
@@ -218,7 +226,7 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
                           " --region ",itsregion,
                           " --taxa ",taxa_group,
                           " --threads ",nthreads,
-                          " --log ",outs[i],".log"
+                          " --log ",outs_fwd[i],".log"
       )
       system(command = itsxpress)
     }
@@ -409,6 +417,26 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   # REMOVE CHIMERAS ####
   seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=ifelse(multithread>1,TRUE,FALSE), verbose=TRUE)
   
+  # TRACK READS ####
+  getN <- function(x) sum(getUniques(x))
+  
+  if(paired){
+    track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+    colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+    rownames(track) <- sample_names
+  } else {
+    track <- cbind(out, sapply(dadaFs, getN), rowSums(seqtab.nochim))
+    colnames(track) <- c("input", "filtered", "denoisedF", "nonchim")
+    rownames(track) <- sample_names
+  }
+  
+  # make name for read tracking output
+  track.out <- paste0(asv.table.dir,"Run_",as.character(run.id),"_",amplicon,"trackreads.RDS")
+  # export tracking results
+  saveRDS(track,track.out)
+  
+  
+  
   # REMOVE CONTAMINANTS ####
   
   # find negative control samples, if any
@@ -427,7 +455,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   }
   
   # make output name for ASV table
-  asv_out <- paste0(asv.table.dir,"Run_",as.character(run.id),"_",amplicon,"_ASV_Table.RDS")
+  asv_out <- paste0(asv.table.dir,"/Run_",as.character(run.id),"_",amplicon,"_ASV_Table.RDS")
   
   saveRDS(seqtab.nochim,asv_out)
 

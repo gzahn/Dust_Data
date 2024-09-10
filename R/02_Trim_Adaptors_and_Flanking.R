@@ -68,7 +68,7 @@ run_itsxpress(directory="./data/raw/cutadapt", # where cutadapted reads live
               nthreads=(parallel::detectCores()-1),
               fwd_pattern="ITS_cutadapt_fwd.fastq.gz",
               rev_pattern="ITS_cutadapt_rev.fastq.gz",
-              itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress", #path to executable
+              itsxpress.path="/home/gzahn/.local/bin/itsxpress", #path to executable
               fwd.only=TRUE)
 
 # 

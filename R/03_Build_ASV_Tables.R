@@ -59,7 +59,7 @@ meta <- meta[keepers,] # subset metadata
 # list of sequencing runs
 all_runs <- meta$run_id %>% as.character() %>% unique
 all_runs <- all_runs[!is.na(all_runs)]
-
+all_runs <- "6"
 
 # RUN ALL ITS DATA ####
 for(seqrun in all_runs){

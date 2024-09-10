@@ -9,6 +9,11 @@ if(!"mycobank" %in% installed.packages()[,"Package"]){
   devtools::install_github("gzahn/mycobank")
 }
 
+
+if(!"ShortRead" %in% installed.packages()[,"Package"]){
+  BiocManager::install("ShortRead")
+}
+
 # packages
 library(tidyverse)
 library(mycobank)
