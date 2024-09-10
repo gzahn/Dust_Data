@@ -22,28 +22,28 @@ Tested on Ubuntu 22.04 and Red Hat 8.10 Linux systems using R v 4.4.0
      ./build_taxonomy_database.sh
      cd -
      ```
-  2.  R/00_Download_Raw_Seq_Data.R
+  2.  ```R/00_Download_Raw_Seq_Data.R```
   
   This script downloads the raw sequence data from the Sequence Read Archive (SRA - PRJNAXXXXXXX)
 
-  3. R/01_Clean_Sample_Metadata.R
+  3. ```R/01_Clean_Sample_Metadata.R```
 
   This script prepares and cleans the sample metadata
 
-  4. R/02_Trim_Adaptors_and_Flanking.R
+  4. ```R/02_Trim_Adaptors_and_Flanking.R```
 
   This script trims Illumina adaptors from all reads and removes flanking 18S regions from ITS reads
 
-  5. R/03_Build_ASV_Tables.R
+  5. ```R/03_Build_ASV_Tables.R```
 
   This script builds ASV tables using DADA2 from trimmed reads. Possible contaminant sequences are detected from negative controls and removed from samples.
   Separate ASV tables are computed for each sequencing run in the project; SSU and ITS amplicons are handled separately.
 
-  6. R/04_Assign_Taxonomy.R
+  6. ```R/04_Assign_Taxonomy.R```
 
   This script assigns taxonomy to all ASV tables using our constructed SSU and ITS databases, respectively.
 
-  7. R/05_Build_Physeq_Objects.R
+  7. ```R/05_Build_Physeq_Objects.R```
 
   This script combines cleaned sample metadata, ASV tables, & taxonomic assignments into phyloseq objects. Separate phyloseq objects are constructed for each ASV table, and can be combined downstream if desired.
   
