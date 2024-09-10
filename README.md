@@ -15,7 +15,7 @@ Tested on Ubuntu 22.04 and Red Hat 8.10 Linux systems using R v 4.4.0
 
   1. Build the SSU & ITS taxonomy databases
 
-  This will download the Eukaryome databases, format them for DADA2 classification, and append the Marjaam VTX taxa to the SSU database.
+  This will download the Eukaryome databases, format them for DADA2 classification, and append the Marjaam VTX taxa to the SSU database. Fungal names are automatically checked against the latest synonym database from MycoBank and updated to current names.
   
      ```
      cd ./taxonomy/
