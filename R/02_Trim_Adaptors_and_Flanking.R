@@ -19,6 +19,9 @@ metadata <- readRDS("./data/full_clean_metadata.RDS")
 metadata$fwd_filepath <- paste0("./data/raw/",basename(metadata$fwd_filepath))
 metadata$rev_filepath <- paste0("./data/raw/",basename(metadata$rev_filepath))
 
+# just for final run (remove for full pipeline from scratch)
+run7 <- metadata %>% 
+  dplyr::filter(run_id == "7")
 
 ## primer sequences ####
 
@@ -33,7 +36,7 @@ ITS2r <- "GCTGCGTTCTTCATCGATGC"
 # RUN CUTADAPT ####
 
 ## On SSU Samples ####
-remove_primers(metadata, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+remove_primers(run7, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
                amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
@@ -46,7 +49,7 @@ remove_primers(metadata, # metadata object for multi-seq-run samples; must conta
                multithread=parallel::detectCores()-1)
 
 ## On ITS Samples ####
-remove_primers(metadata, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+remove_primers(run7, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
                amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
