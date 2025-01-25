@@ -1,9 +1,14 @@
 # Big files not for GitHuub
 data/raw
-data/physeq_objects
+#data/physeq_objects
 testing
 taxonomy
 data/ASV_Tables
+
+# random files that are just big!
+output/scat_its_melt.csv
+output/figs/map_with_piecharts_phylum_legend.png
+
 
 
 # History files

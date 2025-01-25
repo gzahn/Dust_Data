@@ -1,5 +1,12 @@
 # SETUP ####
 
+############################################
+# JUST DO THIS FOR RUN 7 THIS TIME
+# Make sure it's finding all the files
+# probably need some code to update metadata?
+
+
+
 # packages
 library(tidyverse)
 library(phyloseq)
@@ -16,7 +23,7 @@ meta <- readRDS("./data/full_clean_metadata.RDS")
 # writeLines(meta$rev_filepath,"./data/dartfs_rev_paths.txt")
 if(any(meta$fwd_filepath == meta$rev_filepath)){
   meta$fwd_filepath[which(meta$fwd_filepath == meta$rev_filepath)]
-  stop("Some filepaths are duplicated!!!")
+  stop("Some filepaths are duplicated!")
 }
 
 # add cutadapt file paths
@@ -38,13 +45,11 @@ rev_itsx_paths <-
   str_replace("/cutadapt/","/ITSx/") %>% 
   str_replace("_rev.fastq.gz","_rev_ITSxpress.fastq.gz")
 # add to metadata
-meta$itsx_fwd_paths <- ifelse(grepl("_SSU_",fwd_itsx_paths),NA,fwd_itsx_paths)
-meta$itsx_rev_paths <- ifelse(grepl("_SSU_",rev_itsx_paths),NA,rev_itsx_paths)
+meta$itsx_fwd_paths <- ifelse(grepl("SSU",fwd_itsx_paths),NA,fwd_itsx_paths)
+meta$itsx_rev_paths <- ifelse(grepl("SSU",rev_itsx_paths),NA,rev_itsx_paths)
 
 # subset metadata to samples clearly present in cutadapt
 meta <- meta[file.exists(meta$cutadapt_fwd_paths),]
-meta[meta$run_id == "6",'library_id']
-
 
 # remove any ITS samples that didn't pass ITSxpress
 itsx_file_present <- # is there a file for this library?
@@ -55,11 +60,14 @@ is_its <- meta$amplicon == "ITS" # is the library ITS?
 missing_itsx <- is_its & !itsx_file_present # which ITS libraries have missing files?
 keepers <- !missing_itsx | meta$amplicon == "SSU" # keep ITS libraries with files, and all SSU libraries
 meta <- meta[keepers,] # subset metadata
+meta %>% 
+  filter(run_id=="6" & amplicon == "ITS")
 
 # list of sequencing runs
 all_runs <- meta$run_id %>% as.character() %>% unique
 all_runs <- all_runs[!is.na(all_runs)]
 all_runs <- "6"
+seqrun="6"
 
 # RUN ALL ITS DATA ####
 for(seqrun in all_runs){
@@ -113,7 +121,7 @@ for(seqrun in all_runs){
                     rm.phix = TRUE, # remove phiX sequences?
                     compress = TRUE, # gzip compression of output?
                     multithread = (parallel::detectCores() -1), # how many cores to use? Set to FALSE on windows
-                    single.end = TRUE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
+                    single.end = FALSE, # use only forward reads and skip rev reads and merging (e.g., for ITS data)?
                     filtered.dir = "filtered", # name of output directory for all QC filtered reads. will be created if not extant. subdirectory of trimmed filepath
                     asv.table.dir = "./data/ASV_Tables", # path to directory where final ASV table will be saved
                     random.seed = 666

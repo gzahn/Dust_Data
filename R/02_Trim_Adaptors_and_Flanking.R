@@ -21,7 +21,7 @@ metadata$rev_filepath <- paste0("./data/raw/",basename(metadata$rev_filepath))
 
 # just for final run (remove for full pipeline from scratch)
 run7 <- metadata %>% 
-  dplyr::filter(run_id == "7")
+  dplyr::filter(run_id == "6")
 
 ## primer sequences ####
 
@@ -33,10 +33,20 @@ ITS1f <- "CTTGGTCATTTAGAGGAAGTAA"
 ITS2r <- "GCTGCGTTCTTCATCGATGC" 
 
 
+fwd_names <- basename(run7$fwd_filepath) %>% str_split("_S") %>% map_chr(1)
+list.files(file.path("./data/raw/filtN"))
+
+fwd_filtn_names <- file.path("./data/raw/filtN",paste(fwd_names,run7$amplicon,"filtN_fwd.fastq.gz",sep="_"))
+rev_filtn_names <- file.path("./data/raw/filtN",paste(fwd_names,run7$amplicon,"filtN_rev.fastq.gz",sep="_"))
+file.exists(fwd_filtn_names)
+
+m <- 
+  metadata %>% 
+  filter(run_id=="6" & amplicon=="ITS")
 # RUN CUTADAPT ####
 
 ## On SSU Samples ####
-remove_primers(run7, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+remove_primers(metadata=m, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
                amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
@@ -49,7 +59,7 @@ remove_primers(run7, # metadata object for multi-seq-run samples; must contain "
                multithread=parallel::detectCores()-1)
 
 ## On ITS Samples ####
-remove_primers(run7, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
+remove_primers(metadata=m, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
                amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                sampleid.colname = "library_id", # column name in metadata containing unique sample identifier

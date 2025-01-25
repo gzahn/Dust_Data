@@ -7,7 +7,8 @@ library(dada2)
 ## functions ####
 source("./R/functions.R")
 
-
+# readRDS("./data/full_clean_metadata.RDS") %>% 
+#   filter(run_id == "6" & amplicon == "ITS")
 # get taxonomy database files
 ITS_DB <- "./taxonomy/Eukaryome_General_ITS_v1.8_reformatted_maarjam.fasta.gz"
 SSU_DB <- "./taxonomy/Eukaryome_General_SSU_v1.8_reformatted_VTX.fasta.gz"
@@ -30,23 +31,26 @@ run_5_ssu <- "./data/ASV_Tables/Run_5_SSU_ASV_Table.RDS"
 run_6_ssu <- "./data/ASV_Tables/Run_6_SSU_ASV_Table.RDS"
 run_7_ssu <- "./data/ASV_Tables/Run_7_SSU_ASV_Table.RDS"
 
-
-
-for(run in ls(pattern="run_._")){
-  x <- get(run)
-  if(file.exists(x)){
-    asv <- readRDS(x)
-    outfile <- str_replace(x,"_ASV","_Taxonomy")
-    
-    tax <- assign_taxonomy_to_asv_table(asv.table=asv,
-                                        tax.database=ifelse(grepl("_SSU_ASV_Table",x),SSU_DB,ITS_DB),
-                                        multithread=parallel::detectCores(),
-                                        random.seed=666,
-                                        try.rc = TRUE,
-                                        min.boot=50)
-    # export as RDS
-    saveRDS(tax,outfile)
-    
-  } else {next}
+if(file.exists(ITS_DB) & file.exists(SSU_DB)){
+  for(run in ls(pattern="run_._")){
+    x <- get(run)
+    if(file.exists(x)){
+      asv <- readRDS(x)
+      outfile <- str_replace(x,"_ASV","_Taxonomy")
+      
+      tax <- assign_taxonomy_to_asv_table(asv.table=asv,
+                                          tax.database=ifelse(grepl("_SSU_ASV_Table",x),SSU_DB,ITS_DB),
+                                          multithread=parallel::detectCores(),
+                                          random.seed=666,
+                                          try.rc = TRUE,
+                                          min.boot=50)
+      # export as RDS
+      saveRDS(tax,outfile)
+      
+    } else {next}
+  }
+} else {
+  stop("Taxonomy files are missing or not specified correctly.")
 }
+
 

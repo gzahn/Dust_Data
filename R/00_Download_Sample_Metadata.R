@@ -1,5 +1,12 @@
 # SETUP ####
 
+#####################################
+# THIS SCRIPT WILL GO AWAY BEFORE PUBLICATION
+# Just provide the data files locally in repo
+#####################################
+
+
+
 # load packages
 library(tidyverse)
 library(googlesheets4)
