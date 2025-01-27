@@ -42,14 +42,14 @@ plot_bar2 <- function (physeq, x = "Sample", y = "Abundance", fill = NULL,
 
 remove_primers <- function(metadata, # metadata object for multi-seq-run samples; must contain "run" column and fwd/rev filepath columns
                            amplicon.colname = "amplicon", # column name that contains the amplicon info for each sample
-                           amplicon = "SSU", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
+                           amplicon = "ITS", # which amplicon from the run are you processing (ITS, SSU, LSU, etc)?
                            sampleid.colname = "library_id", # column name in metadata containing unique sample identifier
                            fwd.fp.colname = "fwd_filepath", # name of column in metadata indicating fwd filepath to raw data
                            rev.fp.colname = "rev_filepath",
                            fwd_pattern="_R1_",
                            rev_pattern="_R2_",
-                           fwd_primer="GTGCCAGCMGCCGCGGTAA",
-                           rev_primer="GGACTACHVGGGTWTCTAAT",
+                           fwd_primer="CTTGGTCATTTAGAGGAAGTAA",
+                           rev_primer="GCTGCGTTCTTCATCGATGC",
                            multithread=parallel::detectCores()-1){
   
   library(tidyverse); packageVersion("tidyverse")
@@ -105,6 +105,8 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
     if(!file_test("-d", i)){dir.create(i)}
   }
   
+  dir.name <- dirname(fnFs) %>% unique
+  
   # Check for missing files and remove them from fnFs, fnFs.filtN, fnRs, and fnRs.filtN
   extant_files <- file.exists(fnFs) & file.exists(fnRs)
   fnFs <- fnFs[extant_files]
@@ -125,7 +127,7 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   }
   
   # build cutadapt file structure
-  path.cut <- file.path(dirname(fnFs),"cutadapt")
+  path.cut <- file.path(dir.name,"cutadapt")
   # create directories as needed
   for(i in unique(path.cut)){
     if(!dir.exists(i)) dir.create(i)
@@ -134,32 +136,51 @@ remove_primers <- function(metadata, # metadata object for multi-seq-run samples
   # build file names for cutadapt output
   fnFs.cut <- file.path(path.cut, paste0(sample_names,"_cutadapt_fwd.fastq.gz"))
   fnRs.cut <- file.path(path.cut, paste0(sample_names,"_cutadapt_rev.fastq.gz"))
-  
+  file.exists(fnFs.cut)
+  file.info(fnFs.cut)
   FWD.RC <- dada2:::rc(FWD)
   REV.RC <- dada2:::rc(REV)
   # Trim FWD and the reverse-complement of REV off of R1 (forward reads)
   R1.flags <- paste("-g", FWD, "-a", REV.RC) 
   # Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
   R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+  
   # Run Cutadapt
+  file.exists(fnFs.cut)
   for(i in seq_along(fnFs.cut)) {
     if(!file.exists(fnFs.cut[i])){
-      system2("cutadapt", args = c(R1.flags, 
-                                   R2.flags, 
-                                   "-n", 2, 
-                                   "--minimum-length 100",
-                                   "--cores 0",
-                                   "--nextseq-trim",
-                                   "-o", fnFs.cut[i],
-                                   "-p", fnRs.cut[i], 
-                                   fnFs.filtN[i], 
-                                   fnRs.filtN[i])) 
+      
+      args = c(R1.flags, 
+               R2.flags, 
+               "-n", 2, 
+               "--minimum-length 100",
+               "--cores 0",
+               "--nextseq-trim=20",
+               "-o", fnFs.cut[i],
+               "-p", fnRs.cut[i], 
+               fnFs.filtN[i], 
+               fnRs.filtN[i])
+      
+      y <- paste("cutadapt",paste(args,collapse = " "),collapse = " ")
+      sink(paste("./R/cutadapt_commands_run6_",amplicon,".sh",sep=""),append = TRUE)
+      cat(y,"\n")
+      sink(NULL)
+      
+      # system2("cutadapt", args = c(R1.flags,
+      #                              R2.flags,
+      #                              "-n", 2,
+      #                              "--minimum-length 100",
+      #                              "--cores 0",
+      #                              "--nextseq-trim=20",
+      #                              "-o", fnFs.cut[i],
+      #                              "-p", fnRs.cut[i],
+      #                              fnFs.filtN[i],
+      #                              fnRs.filtN[i]))
     } else {next}
     
   }
   
 }
-
 
 # run_itsxpress() ####
 # Isolate ITS region 
@@ -171,9 +192,9 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
                           itsregion="ITS1", # must be "ITS1" or "ITS2"
                           taxa_group="All",
                           nthreads=(parallel::detectCores()-1),
-                          fwd_pattern="ITS_cutadapt_fwd.fastq.gz",
-                          rev_pattern="ITS_cutadapt_rev.fastq.gz",
-                          itsxpress.path="/uufs/chpc.utah.edu/common/home/u6033249/.local/bin/itsxpress", #path to executable
+                          fwd_pattern="cutadapt_fwd.fastq.gz",
+                          rev_pattern="cutadapt_rev.fastq.gz",
+                          itsxpress.path="/home/gzahn/.local/bin/itsxpress", #path to executable
                           fwd.only=TRUE){
   
   # my paths, for easy reference:
@@ -183,7 +204,18 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
   # find the "cutadapted" files
   fwds <- list.files(directory,pattern = fwd_pattern,full.names = TRUE)
   revs <- list.files(directory,pattern = rev_pattern,full.names = TRUE)
+
   
+run7 <-
+  run7 %>%
+  filter(amplicon == "ITS")
+file.size(fnFs.cut)
+  
+    fwds <- fwds[fwds %in% fnFs.cut]
+    revs <- revs[revs %in% fnRs.cut]
+
+    
+    
   # build names for outfiles
   outs_fwd <- paste0(tools::file_path_sans_ext(fwds) %>% 
                    tools::file_path_sans_ext(), 
@@ -198,7 +230,7 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
   
   outs_fwd <- file.path(its_dir,basename(outs_fwd))
   outs_rev <- file.path(its_dir,basename(outs_rev))
-  
+  file.exists(outs_fwd)
   # build the ITSxpress command and run it on each file in turn
 
   if(fwd.only){
@@ -211,11 +243,18 @@ run_itsxpress <- function(directory="./data/raw/cutadapt", # where cutadapted re
                           " --threads ",nthreads,
                           " --log ",outs_fwd[i],".log",
                           " --single_end")
-      cat(fwds[i])
-      system(command = itsxpress)
+      # write commands to file
+      sink("./R/itsxpress_commands_run6.sh",append = TRUE)
+      cat(itsxpress,"\n")
+      sink(NULL)
+
+      cat(outs_fwd[i])
+      # if(!file.exists(outs_fwd[i])){
+      #   system(command = itsxpress)
+      # }
     }
   }
-  
+
   if(!fwd.only){
     for(i in 1:length(fwds)){
       itsxpress <- paste0(itsxpress.path,
@@ -309,13 +348,15 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   }
   
   
+  fns %>% length; filts_f %>% length;rns %>% length; filts_r %>% length
+  
   # filter and trim
   if(paired){
     out <- filterAndTrim(fns, filts_f, rns, filts_r, 
                        maxN=0, 
                        maxEE=maxEE, 
                        truncQ=truncQ,
-                       trimRight = ifelse(any(is.na(trim.right)),0,trim.right[1:2]),
+                       trimRight = c(20,20),#ifelse(any(is.na(trim.right)),0,trim.right),
                        rm.phix=rm.phix, 
                        compress=compress,
                        multithread=multithread)
@@ -365,7 +406,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   
   # learn errors
   errF <- learnErrors(filts_f, multithread=ifelse(multithread>1,TRUE,FALSE), 
-                      MAX_CONSIST = 20,verbose = 1,
+                      MAX_CONSIST = 10,verbose = 1,
                       randomize = TRUE) # set multithread = FALSE on Windows
   errF_out <- paste0("Run_",as.character(run.id),"_",amplicon,"_err_Fwd.RDS")
   saveRDS(errF,file.path(asv.table.dir,errF_out))
@@ -373,7 +414,7 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   
   if(paired){
   errR <- learnErrors(filts_r, multithread=ifelse(multithread>1,TRUE,FALSE), 
-                      MAX_CONSIST = 20,verbose = 1,
+                      MAX_CONSIST = 10,verbose = 1,
                       randomize = TRUE) # set multithread = FALSE on Windows
   errR_out <- paste0("Run_",as.character(run.id),"_",amplicon,"_err_Rev.RDS")
   saveRDS(errR,file.path(asv.table.dir,errR_out))
@@ -391,16 +432,16 @@ build_asv_table <- function(metadata, # metadata object for multi-seq-run sample
   
   # SAMPLE INFERRENCE ####
   dadaFs <- dada(derepF, err=errF, multithread=ifelse(multithread>1,TRUE,FALSE), 
-                 selfConsist = TRUE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
+                 selfConsist = FALSE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
   saveRDS(dadaFs,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_dada_Fwd.RDS")))
   
   if(paired){
     dadaRs <- dada(derepR, err=errR, multithread=ifelse(multithread>1,TRUE,FALSE), 
-                   selfConsist = TRUE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
+                   selfConsist = FALSE, verbose=TRUE, pool = "pseudo") # set multithread = FALSE on Windows
     saveRDS(dadaRs,file.path(asv.table.dir,paste0("Run_",as.character(run.id),"_",amplicon,"_dada_Rev.RDS")))
   }
-  
-  
+
+    
   # MERGE FWD and REV READS ####
   if(paired){
     mergers <- mergePairs(dadaFs, filts_f, dadaRs, filts_r, verbose=FALSE)
@@ -597,7 +638,7 @@ clean_ps_taxonomy <- function(physeq,
   x <- tax_table(physeq)@.Data
   
   for(i in seq_along(ranks)){
-    x[,i] <- x[,i] %>% str_remove(prefix[i])
+    x[,i] <- x[,i] %>% str_remove(prefix[i]) %>% str_remove("\\(([^)]*)\\)")
   }
   
   out <- phyloseq(otu_table(physeq,taxa_are_rows = FALSE),
@@ -608,26 +649,32 @@ clean_ps_taxonomy <- function(physeq,
 }
 
 
-# simplify_fungal_guilds()
+# simplify_fungal_guilds() ####
 # extract major guild groupings
 # needs a data.frame with a "Guild" column that contains the results from FunGuild assignment
 # will return the data.frame with a new column "major_guild"
 simplify_fungal_guilds <- 
   function(x){
     x %>% 
-      mutate(major_guild = case_when(grepl("Ectomycorrhizal",Guild,ignore.case = TRUE) ~ "Ectomycorrhizal",
+      mutate(major_guild = case_when(grepl("Orchid Mycorrhizal",Guild,ignore.case = TRUE) ~ "Orchid Mycorrhizal",
+                                     grepl("Ectomycorrhizal",Guild,ignore.case = TRUE) ~ "Ectomycorrhizal",
                                      grepl("ericoid",Guild,ignore.case = TRUE) ~ "Ericoid mycorrhizal",
                                      grepl("arbuscular",Guild,ignore.case=TRUE) ~ "Arbuscular mycorrhizal",
-                                     grepl("Plant Pathogen",Guild,ignore.case=TRUE) ~ "Plant pathogen",
-                                     grepl("Animal Pathogen",Guild,ignore.case=TRUE) ~ "Animal pathogen",
+                                     grepl("Plant Pathogen",Guild,ignore.case=TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Plant pathogen",
+                                     grepl("Animal Pathogen",Guild,ignore.case=TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Animal pathogen",
                                      grepl("Saprotroph",Guild,ignore.case=TRUE) &
                                        !grepl("mycorrhizal",Guild,ignore.case=TRUE) &
                                        !grepl("pathogen",Guild,ignore.case=TRUE) ~ "Saprotroph",
-                                     grepl("Orchid Mycorrhizal",Guild) ~ "Orchid Mycorrhizal",
-                                     grepl("lichenized",Guild,ignore.case=TRUE) ~ "Lichenized",
-                                     grepl("Animal Parasite",Guild) ~ "Animal Parasite",
-                                     grepl("Algal Parasite|Plant Parasite",Guild) ~ "Plant Parasite",
-                                     grepl("Animal Symbiotroph",Guild) ~ "Animal Symbiotroph"
+                                     grepl("lichenized",Guild,ignore.case=TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Lichenized",
+                                     grepl("Animal Parasite",Guild,ignore.case = TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Animal Parasite",
+                                     grepl("Algal Parasite|Plant Parasite",Guild,ignore.case = TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Plant Parasite",
+                                     grepl("Animal Symbiotroph",Guild,ignore.case = TRUE) &
+                                       !grepl("mycorrhizal",Guild,ignore.case=TRUE) ~ "Animal Symbiotroph"
       ))
   }
 

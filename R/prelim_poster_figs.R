@@ -29,12 +29,6 @@ theme_set(theme_bw() +
                   axis.text = element_text(face='bold',size=12),
                   legend.title = element_text(face='bold',size=16),
                   legend.text = element_text(face='bold',size=12)))
-readRDS("./data/ASV_Tables/Run_1_SSU_ASV_Table.RDS") %>%
-  sum
-readRDS("./data/ASV_Tables/Run_2_SSU_ASV_Table.RDS") %>%
-  sum
-readRDS("./data/ASV_Tables/Run_5_SSU_ASV_Table.RDS") %>%
-  sum
 
 # data
 ssu <- readRDS("./data/physeq_objects/full_ssu_ps_raw.RDS")
@@ -89,6 +83,11 @@ ssu <-
 # JOIN PHYSEQS ####
 full_asv <- merge_phyloseq(ssu,its)
 
+# REMOVE SOIL FOR NOW ####
+full_w_soil <- full_asv
+full_asv <- 
+  full_asv %>% 
+  subset_samples(sample_type != "soil" & year != "2023")
 
 # MERGE ASVs BY TAXONOMY ####
 full <- 
@@ -122,9 +121,22 @@ full <- full %>%
 full_asv <- full_asv %>% 
   subset_samples(sample_sums(full_asv) > 0)
 
+
 # bit of tidying
-full@sam_data$total_precip_jun_nov_mm <- full@sam_data$total_precip_jun_nov_mm %>% unlist %>% as.numeric()
-full_asv@sam_data$total_precip_jun_nov_mm <- full_asv@sam_data$total_precip_jun_nov_mm %>% unlist %>% as.numeric()
+
+# tricky NULL values in the weird list columns
+precip <- character()
+for(i in seq_along(full@sam_data$total_precip_jun_nov_mm)){
+  print(i)
+  if(is.null(full@sam_data$total_precip_jun_nov_mm[[i]])){
+    precip[i] <- NA
+  } else {
+    precip[i] <- full@sam_data$total_precip_jun_nov_mm[[i]] %>% as.character()
+  }
+}
+
+full@sam_data$total_precip_jun_nov_mm <- precip %>% as.numeric()
+full_asv@sam_data$total_precip_jun_nov_mm <- precip %>% as.numeric()
 
 
 # ALPHA DIVERSITY ####
@@ -132,6 +144,8 @@ full_asv@sam_data$total_precip_jun_nov_mm <- full_asv@sam_data$total_precip_jun_
 # estimate Shannon div and richness
 full_alpha <- estimate_richness(full,measures = c("Shannon","Observed"))
 full_asv_alpha <- estimate_richness(full_asv,measures = c("Shannon","Observed"))
+full_asv_alpha_w_soil <- estimate_richness(full_w_soil,measures = c("Shannon","Observed"))
+
 
 # add to data frame for plotting
 full_alpha_df <- 
@@ -144,11 +158,196 @@ full_asv_alpha_df <-
   mutate(shannon = full_asv_alpha$Shannon,
          richness = full_asv_alpha$Observed)
 
+full_asv_alpha_w_soil_df <- 
+  microbiome::meta(full_w_soil) %>% 
+  mutate(richness = full_asv_alpha_w_soil$Observed)
+
 alpha_df <- full_join(full_alpha_df,full_asv_alpha_df)
+
+
+full_asv_alpha_w_soil_df %>% 
+  dplyr::filter(!is.na(site) & amplicon == "SSU") %>% 
+  ggplot(aes(x=site,y=richness,fill=sample_type)) +
+  geom_boxplot()
+
+amf_w_soil <- 
+full_w_soil %>% 
+  subset_samples(!is.na('site') & amplicon == "SSU") %>% 
+  subset_taxa(Phylum == "Glomeromycota")
+amf_melt <- 
+amf_w_soil %>% 
+  tax_glom("Species",NArm = FALSE,bad_empty=c(NA, "", " ", "\t","unclassified")) %>% 
+  psmelt()
+amf_melt <- amf_melt[!is.na(amf_melt$site),]
+amf_melt <- amf_melt[!is.na(amf_melt$canopy),]
+
+# AMF DUST v. SOIL ####
+# amf richness by site, soil vs dust
+
+amf_melt$site <- factor(amf_melt$site,
+                        levels = amf_melt %>% 
+                          select(site,am_em_dom) %>% 
+                          arrange(am_em_dom) %>% 
+                          unique.data.frame() %>% 
+                          pluck("site")
+)
+
+
+amf_site_richness <- 
+amf_melt %>% 
+  dplyr::filter(Abundance > 0) %>% 
+  group_by(site,sample_type,am_em_dom,canopy) %>% 
+  summarize(richness = length(unique(OTU))) 
+# find any sites that don't have observations from both sample_types
+non.duplicated.sites <- 
+amf_site_richness$site %>% table %>% as.data.frame() %>% 
+  dplyr::filter(Freq == 1) %>% 
+  pluck(".") %>% as.character()
+# make mock data for those to fill in data frame
+# this is some embarassingly hacky shit!
+mock.data <- amf_site_richness[amf_site_richness$site %in% non.duplicated.sites,]
+mock.data$richness <- 0
+mock.data <- 
+  mock.data %>% 
+  mutate(sample_type = case_when(sample_type == "soil" ~ "dust",
+                                 sample_type == "dust" ~ "soil"))
+# add in mock data with zeros
+bind_rows(amf_site_richness,mock.data) %>% 
+  mutate(sample_type = sample_type %>% str_to_title()) %>% 
+  ggplot(aes(x=site,y=richness,fill=sample_type)) +
+  geom_col(position = 'dodge') +
+  theme(axis.text.x = element_text(angle=270,hjust=0,vjust=.5)) +
+  geom_point(aes(y=85,color=am_em_dom),shape=15,size=15) +
+  scale_fill_manual(values = pal$pal.earthtones) +
+  scale_color_manual(values = pal$pal.okabe) +
+  guides(fill = guide_legend(override.aes = list(color = NA))) +
+  labs(y="AMF taxon richness",x="Site",fill="Sample type",color="Dominant\nvegetation type") 
+ggsave("./output/figs/amf_site_richness_soil_v_dust.png",dpi=500,height = 9,width = 12)
+
+amf_taxa_list <- 
+amf_melt %>% 
+  dplyr::filter(Abundance > 0) %>%
+  mutate(taxa=paste0(Family,": ",Genus," ",Species) %>% str_replace("unclassified","sp.")) %>% 
+  group_by(site,sample_type,am_em_dom,canopy) %>% 
+  reframe(richness = length(unique(OTU)),
+          taxa=unique(taxa)) 
+
+# This ensures that italics remain in saved versions of the plots
+showtext::showtext_opts(dpi = 500)
+
+table(amf_taxa_list$taxa,amf_taxa_list$site,amf_taxa_list$sample_type) %>% 
+  as.data.frame() %>% 
+  mutate(Var3 = Var3 %>% str_to_title()) %>% 
+  mutate(Freq=ifelse(Freq>0,"Present","Absent")) %>% 
+  mutate(Var2=factor(Var2,
+                     levels = amf_melt %>% 
+                       select(site,canopy) %>% 
+                       arrange(canopy) %>% 
+                       unique.data.frame() %>% 
+                       pluck("site"))) %>% 
+  ggplot(aes(x=Var2,y=Var1,fill=Freq)) +
+  geom_tile() +
+  facet_wrap(~Var3) +
+  theme(axis.text.x = element_text(angle=270,hjust=0,vjust=.5),
+        axis.text.y = element_text(face='bold.italic',size=6),
+        strip.text = element_text(face='bold',size=28),
+        legend.text = element_text(face='bold',size=20),
+        axis.title = element_text(face='bold',size=32)) +
+  scale_fill_manual(values = pal$pal.earthtones) +
+  labs(x="Site",y="AMF taxa",fill="")
+ggsave("./output/figs/amf_presence_soil_vs_dust.png",dpi=500,height = 14,width = 12)
+showtext::showtext_auto(enable = FALSE)
+
+amf_melt %>% 
+  dplyr::filter(Abundance > 0 & sample_type == "soil") %>% 
+  pluck("site") %>% 
+  unique
+
+
+pa <- 
+table(amf_taxa_list$taxa,amf_taxa_list$site,amf_taxa_list$sample_type) %>% 
+  as.data.frame() %>% 
+  mutate(Var3 = Var3 %>% str_to_title()) %>% 
+  mutate(Freq=ifelse(Freq>0,"Present","Absent")) %>% 
+  mutate(Var2=factor(Var2,
+                     levels = amf_melt %>% 
+                       select(site,canopy) %>% 
+                       arrange(canopy) %>% 
+                       unique.data.frame() %>% 
+                       pluck("site")))
+in.dust <- 
+  pa %>% 
+  dplyr::filter(Freq == "Present" & Var3 == "Dust") %>% 
+  pluck("Var1")
+in.soil <- 
+  pa %>% 
+  dplyr::filter(Freq == "Present" & Var3 == "Soil") %>% 
+  pluck("Var1")
+only.in.dust <- in.dust[in.dust %ni% in.soil] %>% as.character()
+
+amf_melt %>% 
+  dplyr::filter(Abundance > 0) %>%
+  mutate(taxa=paste0(Family,": ",Genus," ",Species) %>% str_replace("unclassified","sp.")) %>% 
+  dplyr::filter(taxa %in% only.in.dust & sample_type == 'dust') %>% 
+  dplyr::select(taxa,Abundance,OTU) %>% 
+  write_csv("./output/dust_specialist_amf_taxa.csv")
+
+## are dust taxa at a given site a subset of soil taxa at same site? ####
+names(pa) <- c("taxon","site","sample_type","presence")
+pa %>% glimpse
+# at given site, find taxa present in dust
+dust_taxa_by_site <- 
+pa %>% 
+  dplyr::filter(sample_type == "Dust" & presence == "Present") %>% 
+  group_by(site) %>% 
+  reframe(dust_taxa = unique(taxon))
+
+# at given site, find taxa present in soil
+soil_taxa_by_site <- 
+  pa %>% 
+  dplyr::filter(sample_type == "Soil" & presence == "Present") %>% 
+  group_by(site) %>% 
+  reframe(soil_taxa = unique(taxon))
+# for-loop to pull percent of dust taxa found in soil
+comm.nestedness <- c()
+for(i in unique(soil_taxa_by_site$site)){
+    x <- dust_taxa_by_site %>% 
+    dplyr::filter(site == i) %>% 
+    pluck('dust_taxa')
+    y <- soil_taxa_by_site %>% 
+    dplyr::filter(site == i) %>% 
+    pluck('soil_taxa')
+  
+  in.soil.too <- x[x %in% y]
+  not.in.soil <- x[x %ni% y]
+  percent_nested <- sum(x %in% y) / length(x)
+  if(is.nan(percent_nested)){comm.nestedness[i] <- NA} else {
+    comm.nestedness[i] <- percent_nested
+  }
+}
+z <- comm.nestedness %>% as.data.frame() 
+z$site <- row.names(z)
+z$nestedness <- z$.
+nestedness <- z
+site_info <- site_info %>% 
+  arrange(AM_EM_dom)
+nestedness$site <- factor(nestedness$site,levels=site_info$site)
+nestedness %>% 
+  left_join(site_info) %>% 
+  mutate(site=factor(site,levels=site_info$site)) %>% 
+  ggplot(aes(x=site,y=nestedness)) +
+  geom_col(fill=pal$pal.earthtones[1]) +
+  geom_point(size=6,shape=15,aes(y=1.02,color=AM_EM_dom)) +
+  coord_cartesian(ylim = c(0,1)) +
+  theme(axis.text.x = element_text(angle=270,hjust=0,vjust=.5)) +
+  scale_color_manual(values = pal$pal.okabe) +
+  labs(x="Site",y="Percent nested\nwithin local soil",color="Dominant\nvegetation type")
+ggsave("./output/figs/AMF_nestedness_within_soil_by_site.png",dpi=500,height = 8,width = 10)
 
 ## richness vs weather ####
 richness_v_weather_plots <- 
 alpha_df %>% 
+  dplyr::filter(sample_type != "soil") %>% 
   pivot_longer(contains("_jun_nov_"),
                names_to = "jun_nov_variable",
                values_to = "weather_value") %>% 
@@ -159,6 +358,7 @@ alpha_df %>%
              scales='free') +
   theme(strip.text = element_text(face='bold',size=10)) +
   scale_color_viridis_d(begin=.1,end = .9,option='turbo')
+richness_v_weather_plots
 saveRDS(richness_v_weather_plots,"./output/figs/richness_v_weather_plots.RDS")
 
 
@@ -166,14 +366,14 @@ saveRDS(richness_v_weather_plots,"./output/figs/richness_v_weather_plots.RDS")
 
 # merge by site/year, then transform counts to relabund
 
-full@sam_data$mergevar <- paste(full@sam_data$site,full@sam_data$year,sep="_")
+full@sam_data$mergevar <- paste(full@sam_data$site,full@sam_data$year,full@sam_data$sample_type,sep="_")
 
 # pull metadata for easy access
 meta <- as(full@sam_data,"data.frame")
 # find yearly site means for precip
 precip_summary <- 
 meta %>% 
-  group_by(site,year) %>% 
+  group_by(site,year,sample_type) %>% 
   summarize(precip = mean(total_precip_jun_nov_mm,na.rm = TRUE))
 # precip_summary %>% View
 meta$total_precip_jun_nov_mm
@@ -185,7 +385,7 @@ full %>%
 full_site@sam_data$site <- sample_names(full_site) %>% str_split("_") %>% map_chr(1)
 full_site@sam_data$year <- sample_names(full_site) %>% str_split("_") %>% map_chr(2)
 full_site@sam_data$mean_precip_jun_nov_mm <- precip_summary$precip
-
+full_site@sam_data$sample_type <- sample_names(full_site) %>% str_split("_") %>% map_chr(3)
 
 # arrange sites by precip
 full_site@sam_data$site <- factor(sample_names(full_site),
@@ -196,11 +396,13 @@ full_site@sam_data$site <- factor(sample_names(full_site),
 
 phylum_by_site_precip <- 
 full_site %>% 
+  # subset_samples(sample_type != 'soil') %>% 
   plot_bar2(x="site",fill = "Phylum") +
   labs(x="Site",y="Relative abundance") +
   scale_fill_viridis_d(begin=0,end=1,option='turbo') +
-  facet_wrap(~year,scales='free') +
+  facet_wrap(~year*sample_type,scales='free') +
   labs(caption = "Within each year, sites arranged by increasing precipitation.")
+phylum_by_site_precip
 saveRDS(phylum_by_site_precip,"./output/figs/phylum_by_site_precip_barplot.RDS")
 
 
@@ -227,7 +429,7 @@ funguild <- FUNGuildR::get_funguild_db()
 # get fungaltraits database
 fungaltraits_db <- fungal_traits()
 
-
+full@sam_data$sample_type %>% unique()
 # get search queries
 query_taxonomy <- 
 data.frame(
@@ -355,7 +557,7 @@ guild_by_site %>%
   scale_fill_manual(values = pal$pal.okabe) +
   labs(y="Relative abundance",x="NEON Site") +
   theme(axis.text.x = element_text(angle = 270,face='bold',hjust=0,vjust=.5))
-ggsave("./output/figs/major_guilds_by_site_barplot.png",height = 6, width = 8,dpi=400)
+ggsave("./output/figs/major_guilds_by_site_barplot.png",height = 6, width = 8,dpi=500)
 saveRDS(guild_by_site,"./output/figs/major_guilds_by_site_barplot.RDS")
 
 # MYCORRHIZAL GROUPS ####
@@ -392,7 +594,7 @@ full_melt$amf_richness <- full %>% psmelt %>% pluck("amf_richness")
 full_melt$erm_richness <- full %>% psmelt %>% pluck("erm_richness")
 
 
-full_melt %>% names
+full_melt %>% 
   group_by(site) %>% 
   summarize(ecm_richness = sum(ecm_richness))
 
@@ -486,23 +688,23 @@ ssu %>%
   transform_sample_counts(ra)
 amf_by_site@sam_data$site <- factor(sample_names(amf_by_site),levels = elev_levels)
 
-amf_by_site <- 
+amf_by_site_p <- 
 amf_by_site %>% 
   plot_bar2(fill="Family",x='site') +
-  scale_fill_manual(values = pal$pal.okabe) +
+  scale_fill_viridis_d(option = "H") +
   labs(y="Relative abundance",x="NEON Site")
-amf_by_site
-saveRDS(amf_by_site,"./output/figs/amf_family_relabund_by_site_barplot.RDS")
+amf_by_site_p
+saveRDS(amf_by_site_p,"./output/figs/amf_family_relabund_by_site_barplot.RDS")
 ggsave("./output/figs/amf_family_relabund_by_site_barplot.png",height = 6,width = 7,dpi=400) 
 
 
 # SITE MAP ####
 # map of sites, showing amf present
-
+# dust only on the map for now!
 # re-set ssu
 ssu <- 
   full %>% 
-  subset_samples(amplicon == "SSU")
+  subset_samples(amplicon == "SSU" & sample_type == "dust")
 ssu <- 
   ssu %>% 
   subset_samples(sample_names(ssu) %in% grep("^CON|^POS|neg_",sample_names(ssu),invert = TRUE,value = TRUE))
@@ -512,7 +714,7 @@ ssu <-
 ssu <- 
   ssu %>% 
   subset_taxa(taxa_sums(ssu) > 0)
-
+ssu@sam_data$amf_richness
 x <- data.frame(lon = full@sam_data$long_dd,
            lat = full@sam_data$lat_dd,
            site = full@sam_data$site) %>% 
@@ -537,6 +739,21 @@ x %>%
   unique.data.frame() %>% 
   mutate(amf_present = case_when(site %in% present ~ TRUE,
                                  TRUE ~ FALSE))
+df_for_amf_map
+
+amf_presence_by_site <- 
+bind_rows(amf_site_richness,mock.data) %>% 
+  dplyr::filter(sample_type == 'dust') %>% 
+  dplyr::select(site,richness,sample_type) %>% 
+  mutate(amf_present = case_when(richness > 0 ~ TRUE,
+                                 richness == 0 ~ FALSE)) %>% 
+  ungroup %>% 
+  dplyr::select(site,amf_present)
+df_for_amf_map$amf_present <- NULL # override previous amf presence determination for now
+# hacky, hacky, garbage. Do this carefully later!
+df_for_amf_map <- 
+  df_for_amf_map %>% 
+  left_join(amf_presence_by_site)
 
 # make individual pie charts for each site
 unique_sites <- full@sam_data$site %>% unique
@@ -582,20 +799,26 @@ area <-
                        scale = 2,
                        style=mapstyle)
 
+# This ensures that italics remain in saved versions of the plots
+showtext::showtext_auto()
+showtext::showtext_opts(dpi = 500)
+
 ggmap::ggmap(area) +
   geom_image(data=df_for_amf_map,aes(image=piechart)) +
   geom_point(data=dplyr::filter(df_for_amf_map,amf_present),
              aes(x=lon,y=lat),color='black',size=1.5,alpha=1,shape=19) +
   geom_point(data=dplyr::filter(df_for_amf_map,amf_present),
-             aes(x=lon,y=lat),color='black',size=2,alpha=1,shape=8)
+             aes(x=lon,y=lat),color='black',size=2,alpha=1,shape=8) +
+  theme(axis.text = element_blank(),
+        axis.title = element_blank())
 
-  geom_text_s(data=df_for_amf_map,color.target = 'all',
-              aes(x=long_dd,y=lat_dd,label=site),
-              nudge_x = 1,
-              nudge_y = sites$nudge_y,
-              color='white',size=2,
-              point.padding = 0.4)
-ggsave("./output/figs/map_with_piecharts_phylum.png",height = 10,width = 10,dpi=400)
+  # geom_text_s(data=df_for_amf_map,color.target = 'all',
+  #             aes(x=long_dd,y=lat_dd,label=site),
+  #             nudge_x = 1,
+  #             nudge_y = sites$nudge_y,
+  #             color='white',size=2,
+  #             point.padding = 0.4)
+ggsave("./output/figs/map_with_piecharts_phylum.png",height = 10,width = 10,dpi=500)
 
 
 

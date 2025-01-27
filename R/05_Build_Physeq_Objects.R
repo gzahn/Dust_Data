@@ -26,7 +26,7 @@ out_paths <- paste0(asv_tables %>% str_remove("_ASV_Table.RDS"),"_physeq_object.
 meta <- readRDS("./data/full_clean_metadata.RDS")
 
 
-
+i <- 2
 # BUILD PS OBJECTS ####
 for(i in seq_along(asv_tables)){
   
@@ -36,15 +36,17 @@ for(i in seq_along(asv_tables)){
   # load taxonomy table
   taxa <- readRDS(tax_tables[i])
   
-  # subset metadata to match
+  # subset metadata and asv table to match
   meta_subset <- meta[meta$library_id %in% row.names(asv),]
-  
+  asv <- asv[row.names(asv) %in% meta$library_id,]
+ 
   # set up physeq components
   otu <- otu_table(asv,taxa_are_rows = FALSE)
   met <- sample_data(meta_subset)
   sample_names(met) <- row.names(asv)
+  sample_names(asv) <- row.names(asv)
   tax <- tax_table(taxa)
-  
+ 
   # build physeq object
   physeq <- phyloseq(otu,
                      met,

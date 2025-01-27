@@ -79,6 +79,18 @@ lib_data <-
 collection_data %>% glimpse
 for_analysis %>% glimpse
 
+# deal with odd list-cols
+# convert NULL to NA where needed
+# lib_data$total_precip_jun_nov_mm[!map_lgl(lib_data$total_precip_jun_nov_mm,length)] <- NA
+# 
+# lib_data$total_precip_jun_nov_mm <- 
+#   lib_data$total_precip_jun_nov_mm %>% 
+#   unlist %>% 
+#   as.numeric()
+# just delete the bad column
+lib_data$total_precip_jun_nov_mm <- NULL
+
+
 # EXPORT ####
 saveRDS(lib_data,"./data/full_clean_metadata.RDS")
 # ... Old Code below... ####
