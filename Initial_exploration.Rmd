@@ -1,0 +1,26 @@
+---
+title: "Initial_data_exploration"
+author: "Smriti Pehim Limbu"
+date: "2025-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#package upload
+```{r}
+install.packages("librarian")
+library(librarian)
+librarian::shelf(tidyverse, dplyr, ggplot2, readr)
+install.packages("BiocManager")
+BiocManager::install("phyloseq")
+library(phyloseq)
+```
+
+#file upload
+```{r}
+
+
+```
