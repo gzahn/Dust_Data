@@ -220,7 +220,7 @@ ssu <- ssu %>%
 ### sanity checks
 # check that only mycorrhizal fungi remain in both physeq objects
 if(ssu@tax_table[,1] %>% unique %>% as.character() != "Fungi" | 
-   ssu@tax_table[,4] %>% unique %>% as.character() != "Glomerales" |
+   !any(ssu@tax_table[,4] %>% unique %>% as.character() != "Glomerales") |
    !any(grepl(pattern = "mycorrhizal",its@tax_table[,1] %>% unique %>% as.character()))){
   stop("Recheck subsetting. Non-fungi are still present in taxonomy table(s).")
 } else {
@@ -251,6 +251,28 @@ ssu_pa <-
   ssu %>% 
   subset_samples(sample_sums(ssu) > 0)
 
+# clean up to useful metadata columns
+keeper_cols <- c("index","sample_id","sample_type","amplicon","library_id","site","run_id",
+                 "height","height_cm","lat_dd","long_dd","am_em_dom","site_avg_elevation_m","year",
+                 "mean10m_wind_annual_m_s","mean10m_minimum_wind_annual_m_s","mean10m_maximum_wind_annual_m_s",
+                 "mean10m_wind_jun_nov_m_s","mean10m_minimum_wind_jun_nov_m_s","mean10m_maximum_wind_jun_nov_m_s",
+                 "mean_canopy_wind_annual_m_s","mean_canopy_minimum_wind_annual_m_s","mean_canopy_maximum_wind_annual_m_s",
+                 "mean_canopy_wind_jun_nov_m_s","mean_canopy_minimum_wind_jun_nov_m_s","mean_canopy_maximum_wind_jun_nov_m_s",
+                 "mean_temp_annual_c","max_temp_annual_c","min_temp_annual_c","mean_temp_jun_nov_c","max_temp_jun_nov_c",
+                 "min_temp_jun_nov_c","total_precip_mm")
+its_pa@sam_data <- 
+  its_pa@sam_data %>% 
+  as('data.frame') %>% 
+  dplyr::select(all_of(keeper_cols)) %>% 
+  sample_data()
+ssu_pa@sam_data <- 
+  ssu_pa@sam_data %>% 
+  as('data.frame') %>% 
+  dplyr::select(all_of(keeper_cols)) %>% 
+  sample_data()
+# make taxonomic rank names match
+colnames(ssu_pa@tax_table) <- c("Guild","Phylum","Class","Order","Family","Genus","Species")
+
 # merged version (presence/absence for all mycorrhizal guild taxa, merged SSU and ITS)
 full_pa <- 
   merge_phyloseq(its_pa,ssu_pa)
@@ -259,5 +281,14 @@ full_pa <-
   full_pa %>% 
   transform_sample_counts(function(x){ifelse(x>0,1,0)})
 
+
+
 # save as RDS
 saveRDS(full_pa,"./data/physeq_objects/merged_ps_mycorrhizal_taxa_only_presenceabsence.RDS")
+
+# melt phyloseq (relabund, merged)
+full_melt <- psmelt(full_pa)
+names(full_melt)
+# save melted data frame
+saveRDS(full_melt,"./data/physeq_objects/merged_ps_mycorrhizal_taxa_only_presenceabsence_melted_df.RDS")
+
