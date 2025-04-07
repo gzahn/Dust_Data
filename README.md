@@ -46,17 +46,21 @@ Tested on Ubuntu 22.04 and Red Hat 8.10 Linux systems using R v 4.4.0
   7. ```R/05_Build_Physeq_Objects.R```
 
   This script combines cleaned sample metadata, ASV tables, & taxonomic assignments into phyloseq objects. Separate phyloseq objects are constructed for each ASV table, and can be combined downstream if desired.
+
+  8. ```R/06_Clean_and_Prep_Data.R```
+
+  This script cleans up the metadata to only useful variables. It also subsets to taxa that match specific conditions:
+
+    - ITS taxa subsetted to known non-AMF mycorrhizal lineages (as detected via fungaltraits database)
+    - SSU taxa subsetted to only AMF lineages (Glomeromycota)
+  
+  These remaining taxa are then combined into a single presence-absence phyloseq object. Presence-absence is required in order to realistically merge the two sequencing approaches. What is left is a record of all the mycorrhizal taxa that were found in each sample. The script produces 2 main objects for downstream analysis:
+
+    - ```./data/physeq_objects/merged_ps_mycorrhizal_taxa_only_presenceabsence.RDS``` A phyloseq object of the mycorrhizal taxa across all samples. Samples with no mycorrhizal taxa are removed. Abundances are transformed to presence-absence.
+    - ```./data/physeq_objects/merged_ps_mycorrhizal_taxa_only_presenceabsence_melted_df.RDS``` A "melted" version of the phyloseq object as a data frame. Each row is an observation of a specific taxon in a specific sample. "Abundance" is marked as 1 or 0 for presence or absence.
+
+  Either of these objects should be ready to import and analyze.
   
 
 
 ___
-
-
-
-List of sequence data file paths:
-
-./file_list.txt
-
-This file was generated with
-
-```find /dartfs/rc/lab/C/ChaudharyB/SequencingRuns -name "*.fastq.gz" -type f > file_list.txt```
